@@ -3,8 +3,21 @@ import yaml
 import os
 import sys
 
+def validate_file_path(file_path: str) -> bool:
+    """Validate if the file path has safe extension"""
+    _, ext = os.path.splitext(file_path)
+    return ext.lower() in ['.yml', '.yaml', '.jinja2', '.py']
+
 def create_dag_files(config_path, dag_files_path, project):
-    BASE_DIR = os.path.dirname(os.path.abspath((__file__)))
+    # Validate config file path
+    if not validate_file_path(config_path):
+        raise ValueError(f"Invalid file path or extension: {config_path}")
+    
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    template_path = os.path.join(BASE_DIR, 'template.jinja2')
+    if not validate_file_path(template_path):
+        raise ValueError(f"Invalid template file path or extension: {template_path}")
+        
     env = Environment(loader=FileSystemLoader(BASE_DIR))
     template = env.get_template('template.jinja2')
     
@@ -23,7 +36,8 @@ def create_dag_files(config_path, dag_files_path, project):
             market['is_exists'] = "{{ task_instance.xcom_pull(task_ids='market_exists_check_task', key='market_exists') }}"
             # Render template with config values
             
-            with open(f"{dag_files_path}/dtwin_ran_invtry_samsung_{x['market_name']}.py", 'w+') as f:
+            output_file = os.path.join(dag_files_path, f"dtwin_ran_invtry_samsung_{x['market_name']}.py")
+            with open(output_file, 'w+') as f:
                 f.write(template.render(market))
 
 if __name__ == "__main__":
