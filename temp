@@ -2,31 +2,70 @@ from jinja2 import Environment, FileSystemLoader
 import yaml
 import os
 import sys
+from pathlib import Path
+
+def validate_path(path):
+    try:
+        resolved_path = os.path.abspath(os.path.realpath(path))
+        if not os.path.exists(os.path.dirname(resolved_path)):
+            raise ValueError(f"Directory does not exist: {os.path.dirname(resolved_path)}")
+        return resolved_path
+    except Exception as e:
+        raise ValueError(f"Invalid path: {str(e)}")
+
+def sanitize_filename(filename):
+    valid_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.')
+    return ''.join(c for c in filename if c in valid_chars)
 
 def create_dag_files(config_path, dag_files_path, project):
-    BASE_DIR = os.path.dirname(os.path.abspath((__file__)))
-    env = Environment(loader=FileSystemLoader(BASE_DIR))
-    template = env.get_template('template.jinja2')
-
-    with open(f"{config_path}", "r") as configfile:
-        config_data = yaml.safe_load(configfile)
-        markets = config_data[project][0]
-        market = {}
-        # print(markets)
-        for x in markets:
-            market['market_name'] = x['market_name']
-            market['technologies'] = x['technologies']
-            market['recon_days'] = x['recon_days']
-            market['ds'] = '{{ data_interval_end.strftime("%Y-%m-%d") }}'
-            market['ds_nodash'] = '{{ data_interval_end.strftime("%Y%m%d") }}'
-            market['schedule'] = x['schedule']
-            market['is_exists'] = "{{ task_instance.xcom_pull(task_ids='market_file_exists_check_task', key='market_exists') }}"
-            # Render template with config values
-            with open(f"{dag_files_path}/dtwin_ran_invtry_nokia_{x['market_name']}.py", 'w+') as f:
-                f.write(template.render(market))
+    try:
+        safe_config_path = validate_path(config_path)
+        safe_dag_path = validate_path(dag_files_path)
+        
+        BASE_DIR = Path(__file__).resolve().parent
+        env = Environment(loader=FileSystemLoader(str(BASE_DIR)), autoescape=True)
+        template = env.get_template('template.jinja2')
+        
+        with open(safe_config_path, "r") as configfile:
+            config_data = yaml.safe_load(configfile)
+            
+            if project not in config_data:
+                raise ValueError(f"Project {project} not found in config")
+                
+            markets = config_data[project][0]
+            market = {}
+            
+            for x in markets:
+                market['market_name'] = sanitize_filename(x['market_name'])
+                market['technologies'] = x['technologies']
+                market['recon_days'] = x['recon_days']
+                market['ds'] = '{{ data_interval_end.strftime("%Y-%m-%d") }}'
+                market['ds_nodash'] = '{{ data_interval_end.strftime("%Y%m%d") }}'
+                market['schedule'] = x['schedule']
+                market['is_exists'] = "{{ task_instance.xcom_pull(task_ids='market_file_exists_check_task', key='market_exists') }}"
+                
+                safe_output_filename = f"dtwin_ran_invtry_nokia_{market['market_name']}.py"
+                safe_output_path = os.path.join(safe_dag_path, safe_output_filename)
+                
+                if not os.path.normpath(safe_output_path).startswith(os.path.normpath(safe_dag_path)):
+                    raise ValueError("Path traversal detected")
+                    
+                with open(safe_output_path, 'w+') as f:
+                    f.write(template.render(market))
+                    
+    except Exception as e:
+        raise RuntimeError(f"Error creating DAG files: {str(e)}")
 
 if __name__ == "__main__":
-    config_path = str(sys.argv[1])
-    dag_files_path = str(sys.argv[2])
-    project = str(sys.argv[3])
-    create_dag_files(config_path, dag_files_path, project)
+    if len(sys.argv) != 4:
+        print("Usage: script.py <config_path> <dag_files_path> <project>")
+        sys.exit(1)
+        
+    try:
+        config_path = str(sys.argv[1])
+        dag_files_path = str(sys.argv[2])
+        project = str(sys.argv[3])
+        create_dag_files(config_path, dag_files_path, project)
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        sys.exit(1)
