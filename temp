@@ -17,6 +17,28 @@ def sanitize_filename(filename):
     valid_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.')
     return ''.join(c for c in filename if c in valid_chars)
 
+def secure_open_read(filepath):
+    resolved_path = validate_path(filepath)
+    if not os.path.isfile(resolved_path):
+        raise ValueError(f"File does not exist: {resolved_path}")
+    try:
+        return open(resolved_path, "r")
+    except Exception as e:
+        raise ValueError(f"Error opening file: {str(e)}")
+
+def secure_open_write(filepath, base_dir):
+    resolved_path = validate_path(filepath)
+    resolved_base = validate_path(base_dir)
+    
+    if not os.path.normpath(resolved_path).startswith(os.path.normpath(resolved_base)):
+        raise ValueError("Path traversal detected")
+        
+    try:
+        os.makedirs(os.path.dirname(resolved_path), exist_ok=True)
+        return open(resolved_path, "w+")
+    except Exception as e:
+        raise ValueError(f"Error opening file for writing: {str(e)}")
+
 def create_dag_files(config_path, dag_files_path, project):
     try:
         safe_config_path = validate_path(config_path)
@@ -26,7 +48,7 @@ def create_dag_files(config_path, dag_files_path, project):
         env = Environment(loader=FileSystemLoader(str(BASE_DIR)), autoescape=True)
         template = env.get_template('template.jinja2')
         
-        with open(safe_config_path, "r") as configfile:
+        with secure_open_read(safe_config_path) as configfile:
             config_data = yaml.safe_load(configfile)
             
             if project not in config_data:
@@ -47,10 +69,7 @@ def create_dag_files(config_path, dag_files_path, project):
                 safe_output_filename = f"dtwin_ran_invtry_nokia_{market['market_name']}.py"
                 safe_output_path = os.path.join(safe_dag_path, safe_output_filename)
                 
-                if not os.path.normpath(safe_output_path).startswith(os.path.normpath(safe_dag_path)):
-                    raise ValueError("Path traversal detected")
-                    
-                with open(safe_output_path, 'w+') as f:
+                with secure_open_write(safe_output_path, safe_dag_path) as f:
                     f.write(template.render(market))
                     
     except Exception as e:
