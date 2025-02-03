@@ -3,28 +3,56 @@ import yaml
 import os
 import sys
 
+def validate_path(base_dir, path):
+    """
+    Validate that the given path is within the base directory to prevent directory traversal.
+    """
+    base_dir = os.path.abspath(base_dir)
+    path = os.path.abspath(path)
+    if not path.startswith(base_dir):
+        raise ValueError(f"Invalid path: {path} is not within the base directory {base_dir}")
+    return path
+
 def create_dag_files(config_path, dag_files_path, project):
-    BASE_DIR = os.path.dirname(os.path.abspath((__file__)))
+    # Normalize and validate paths
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    config_path = validate_path(BASE_DIR, os.path.normpath(config_path))
+    dag_files_path = validate_path(BASE_DIR, os.path.normpath(dag_files_path))
+
+    # Load Jinja2 template
     env = Environment(loader=FileSystemLoader(BASE_DIR))
     template = env.get_template('template.jinja2')
 
-    with open(f"{config_path}", "r") as configfile:
+    # Read and process the YAML configuration
+    with open(config_path, "r") as configfile:
         config_data = yaml.safe_load(configfile)
         markets = config_data[project][0]
-        market = {}
         for x in markets:
-            market['market_name'] = x['market_name']
-            market['technologies'] = x['technologies']
-            market['recon_days'] = x['recon_days']
-            market['ds'] = '{{ data_interval_end.strftime("%Y-%m-%d") }}'
-            market['ds_nodash'] = '{{ data_interval_end.strftime("%Y%m%d") }}'
-            market['schedule'] = x['schedule']
-            market['is_exists'] = "{{ task_instance.xcom_pull(task_ids='market_file_exists_check_task', key='market_exists') }}"
-            with open(f"{dag_files_path}/dtwin_ran_invtry_nokia_{x['market_name']}.py", 'w+') as f:
+            market = {
+                'market_name': x['market_name'],
+                'technologies': x['technologies'],
+                'recon_days': x['recon_days'],
+                'ds': '{{ data_interval_end.strftime("%Y-%m-%d") }}',
+                'ds_nodash': '{{ data_interval_end.strftime("%Y%m%d") }}',
+                'schedule': x['schedule'],
+                'is_exists': "{{ task_instance.xcom_pull(task_ids='market_file_exists_check_task', key='market_exists') }}"
+            }
+            # Construct the output file path securely
+            output_file = os.path.join(dag_files_path, f"dtwin_ran_invtry_nokia_{x['market_name']}.py")
+            with open(output_file, 'w+') as f:
                 f.write(template.render(market))
 
 if __name__ == "__main__":
-    config_path = str(sys.argv[1])
-    dag_files_path = str(sys.argv[2])
-    project = str(sys.argv[3])
-    create_dag_files(config_path, dag_files_path, project)
+    if len(sys.argv) != 4:
+        print("Usage: python script.py <config_path> <dag_files_path> <project>")
+        sys.exit(1)
+
+    config_path = sys.argv[1]
+    dag_files_path = sys.argv[2]
+    project = sys.argv[3]
+
+    try:
+        create_dag_files(config_path, dag_files_path, project)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
