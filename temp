@@ -9,15 +9,15 @@ def validate_file_path(file_path: str) -> bool:
     """Validate if the file path has an allowed extension and prevent traversal."""
     if not file_path or not isinstance(file_path, str):
         return False
-    
+
     file_path = os.path.realpath(file_path)  # Resolve symbolic links & absolute path
     allowed_extensions = {'.yml', '.yaml', '.jinja2', '.py'}
-    
-    # Ensure it's within an allowed directory (Modify this if you have a specific safe path)
+
+    # Ensure the file is within a known safe directory
     base_safe_path = os.path.realpath(os.getcwd())  # Change to a fixed trusted path if needed
     if not file_path.startswith(base_safe_path):
         return False
-    
+
     return Path(file_path).suffix.lower() in allowed_extensions
 
 def sanitize_filename(filename: str) -> str:
@@ -35,7 +35,7 @@ def is_safe_directory(directory: str) -> bool:
     try:
         directory = os.path.realpath(directory)  # Resolve absolute path
         base_safe_path = os.path.realpath(os.getcwd())  # Modify to your allowed safe directory
-        
+
         return (
             os.path.exists(directory)
             and os.path.isdir(directory)
@@ -81,21 +81,16 @@ def create_dag_files(config_path: str, dag_files_path: str, project: str) -> Non
 
             output_path = os.path.realpath(os.path.join(dag_files_path, output_filename))
 
-            # Ensure output path remains inside dag_files_path
+            # 🔒 Ensure output path remains inside dag_files_path (PREVENT PATH TRAVERSAL)
             if not output_path.startswith(os.path.realpath(dag_files_path)):
                 raise ValueError(f"Potential directory traversal detected: {output_path}")
 
-            market = {
-                'technologies': market_config.get('technologies', []),
-                'recon_days': market_config.get('recon_days', 0),
-                'ds': '{{ data_interval_end.strftime("%Y-%m-%d") }}',
-                'ds_nodash': '{{ data_interval_end.strftime("%Y%m%d") }}',
-                'schedule': market_config.get('schedule', ''),
-                'is_exists': "{{ task_instance.xcom_pull(task_ids='market_file_exists_check_task', key='market_exists') }}",
-                'market_name': market_name
-            }
+            # 🔒 Ensure we are writing to a file, not a directory
+            if os.path.exists(output_path) and not os.path.isfile(output_path):
+                raise ValueError(f"Invalid file path: {output_path} is not a file.")
 
-            with open(output_path, 'w', encoding='utf-8') as f:
+            # 🔒 Open file securely
+            with open(os.open(output_path, os.O_CREAT | os.O_WRONLY, 0o600), 'w', encoding='utf-8') as f:
                 f.write(template.render(market))
 
     except (OSError, yaml.YAMLError) as e:
