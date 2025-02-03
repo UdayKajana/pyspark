@@ -6,36 +6,54 @@ from pathlib import Path
 
 def validate_path(path):
     try:
-        resolved_path = os.path.abspath(os.path.realpath(path))
-        if not os.path.exists(os.path.dirname(resolved_path)):
-            raise ValueError(f"Directory does not exist: {os.path.dirname(resolved_path)}")
-        return resolved_path
+        # Convert to Path object for platform-independent handling
+        path_obj = Path(path).resolve()
+        parent_dir = path_obj.parent
+        
+        # Ensure parent directory exists and is absolute
+        if not parent_dir.exists() or not parent_dir.is_absolute():
+            raise ValueError(f"Invalid directory: {parent_dir}")
+            
+        # Convert back to string using os.fspath for platform-specific handling
+        return os.fspath(path_obj)
     except Exception as e:
         raise ValueError(f"Invalid path: {str(e)}")
 
 def sanitize_filename(filename):
     valid_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.')
-    return ''.join(c for c in filename if c in valid_chars)
+    sanitized = ''.join(c for c in filename if c in valid_chars)
+    if not sanitized:
+        raise ValueError("Invalid filename after sanitization")
+    return sanitized
 
 def secure_open_read(filepath):
-    resolved_path = validate_path(filepath)
-    if not os.path.isfile(resolved_path):
-        raise ValueError(f"File does not exist: {resolved_path}")
     try:
-        return open(resolved_path, "r")
+        path_obj = Path(filepath).resolve()
+        if not path_obj.is_file():
+            raise ValueError(f"File does not exist: {path_obj}")
+            
+        # Use Path.open() instead of built-in open()
+        return path_obj.open(mode='r', encoding='utf-8')
     except Exception as e:
         raise ValueError(f"Error opening file: {str(e)}")
 
 def secure_open_write(filepath, base_dir):
-    resolved_path = validate_path(filepath)
-    resolved_base = validate_path(base_dir)
-    
-    if not os.path.normpath(resolved_path).startswith(os.path.normpath(resolved_base)):
-        raise ValueError("Path traversal detected")
-        
     try:
-        os.makedirs(os.path.dirname(resolved_path), exist_ok=True)
-        return open(resolved_path, "w+")
+        path_obj = Path(filepath).resolve()
+        base_obj = Path(base_dir).resolve()
+        
+        if not base_obj.exists():
+            raise ValueError(f"Base directory does not exist: {base_obj}")
+            
+        # Check for path traversal
+        if not str(path_obj).startswith(str(base_obj)):
+            raise ValueError("Path traversal detected")
+            
+        # Create parent directories if needed
+        path_obj.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Use Path.open() instead of built-in open()
+        return path_obj.open(mode='w+', encoding='utf-8')
     except Exception as e:
         raise ValueError(f"Error opening file for writing: {str(e)}")
 
@@ -44,14 +62,14 @@ def create_dag_files(config_path, dag_files_path, project):
         safe_config_path = validate_path(config_path)
         safe_dag_path = validate_path(dag_files_path)
         
-        BASE_DIR = Path(__file__).resolve().parent
-        env = Environment(loader=FileSystemLoader(str(BASE_DIR)), autoescape=True)
+        base_dir = Path(__file__).resolve().parent
+        env = Environment(loader=FileSystemLoader(os.fspath(base_dir)), autoescape=True)
         template = env.get_template('template.jinja2')
         
         with secure_open_read(safe_config_path) as configfile:
             config_data = yaml.safe_load(configfile)
             
-            if project not in config_data:
+            if not isinstance(config_data, dict) or project not in config_data:
                 raise ValueError(f"Project {project} not found in config")
                 
             markets = config_data[project][0]
@@ -67,7 +85,7 @@ def create_dag_files(config_path, dag_files_path, project):
                 market['is_exists'] = "{{ task_instance.xcom_pull(task_ids='market_file_exists_check_task', key='market_exists') }}"
                 
                 safe_output_filename = f"dtwin_ran_invtry_nokia_{market['market_name']}.py"
-                safe_output_path = os.path.join(safe_dag_path, safe_output_filename)
+                safe_output_path = Path(safe_dag_path).joinpath(safe_output_filename)
                 
                 with secure_open_write(safe_output_path, safe_dag_path) as f:
                     f.write(template.render(market))
