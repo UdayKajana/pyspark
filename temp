@@ -2,101 +2,28 @@ from jinja2 import Environment, FileSystemLoader
 import yaml
 import os
 import sys
-import re
-from pathlib import Path
 
-def validate_file_path(file_path: str) -> bool:
-    """Validate if the file path has an allowed extension and prevent traversal."""
-    if not file_path or not isinstance(file_path, str):
-        return False
+def create_dag_files(config_path, dag_files_path, project):
+    BASE_DIR = os.path.dirname(os.path.abspath((__file__)))
+    env = Environment(loader=FileSystemLoader(BASE_DIR))
+    template = env.get_template('template.jinja2')
 
-    file_path = os.path.realpath(file_path)  # Resolve symbolic links & absolute path
-    allowed_extensions = {'.yml', '.yaml', '.jinja2', '.py'}
-
-    # Ensure the file is within a known safe directory
-    base_safe_path = os.path.realpath(os.getcwd())  # Change to a fixed trusted path if needed
-    if not file_path.startswith(base_safe_path):
-        return False
-
-    return Path(file_path).suffix.lower() in allowed_extensions
-
-def sanitize_filename(filename: str) -> str:
-    """Sanitize filename to prevent directory traversal and invalid characters."""
-    if not filename or not isinstance(filename, str):
-        return ""
-
-    filename = os.path.basename(filename)  # Strip directory paths
-    filename = re.sub(r'[^\w\-_\.]', '_', filename)  # Allow only safe characters
-
-    return filename
-
-def is_safe_directory(directory: str) -> bool:
-    """Ensure the directory is safe, exists, and is not a symbolic link."""
-    try:
-        directory = os.path.realpath(directory)  # Resolve absolute path
-        base_safe_path = os.path.realpath(os.getcwd())  # Modify to your allowed safe directory
-
-        return (
-            os.path.exists(directory)
-            and os.path.isdir(directory)
-            and directory.startswith(base_safe_path)  # Prevent escaping to unsafe locations
-        )
-    except (TypeError, ValueError):
-        return False
-
-def create_dag_files(config_path: str, dag_files_path: str, project: str) -> None:
-    """Generate DAG files from a Jinja template securely."""
-
-    if not all([config_path, dag_files_path, project]):
-        raise ValueError("All parameters must be non-empty strings")
-
-    if not validate_file_path(config_path):
-        raise ValueError(f"Invalid or unsafe configuration file path: {config_path}")
-
-    if not is_safe_directory(dag_files_path):
-        raise ValueError(f"Invalid or unsafe DAG files directory: {dag_files_path}")
-
-    base_dir = os.path.dirname(os.path.realpath(__file__))
-
-    try:
-        # Set up Jinja2 environment
-        env = Environment(loader=FileSystemLoader(base_dir), autoescape=True)
-        template = env.get_template('template.jinja2')
-
-        with open(config_path, "r", encoding='utf-8') as configfile:
-            config_data = yaml.safe_load(configfile)
-
-        if not isinstance(config_data, dict) or project not in config_data:
-            raise ValueError(f"Invalid configuration data or project '{project}' not found")
-
+    with open(f"{config_path}", "r") as configfile:
+        config_data = yaml.safe_load(configfile)
         markets = config_data[project][0]
-
-        for market_config in markets:
-            market_name = sanitize_filename(market_config.get('market_name', ''))
-            if not market_name:
-                continue  # Skip empty or unsafe market names
-
-            output_filename = f"dtwin_ran_invtry_nokia_{market_name}.py"
-            output_filename = sanitize_filename(output_filename)  # Double-check safety
-
-            output_path = os.path.realpath(os.path.join(dag_files_path, output_filename))
-
-            # 🔒 Ensure output path remains inside dag_files_path (PREVENT PATH TRAVERSAL)
-            if not output_path.startswith(os.path.realpath(dag_files_path)):
-                raise ValueError(f"Potential directory traversal detected: {output_path}")
-
-            # 🔒 Ensure we are writing to a file, not a directory
-            if os.path.exists(output_path) and not os.path.isfile(output_path):
-                raise ValueError(f"Invalid file path: {output_path} is not a file.")
-
-            # 🔒 Open file securely
-            with open(os.open(output_path, os.O_CREAT | os.O_WRONLY, 0o600), 'w', encoding='utf-8') as f:
+        market = {}
+        # print(markets)
+        for x in markets:
+            market['market_name'] = x['market_name']
+            market['technologies'] = x['technologies']
+            market['recon_days'] = x['recon_days']
+            market['ds'] = '{{ data_interval_end.strftime("%Y-%m-%d") }}'
+            market['ds_nodash'] = '{{ data_interval_end.strftime("%Y%m%d") }}'
+            market['schedule'] = x['schedule']
+            market['is_exists'] = "{{ task_instance.xcom_pull(task_ids='market_file_exists_check_task', key='market_exists') }}"
+            # Render template with config values
+            with open(f"{dag_files_path}/dtwin_ran_invtry_nokia_{x['market_name']}.py", 'w+') as f:
                 f.write(template.render(market))
-
-    except (OSError, yaml.YAMLError) as e:
-        raise OSError(f"Error processing files: {str(e)}")
-    except Exception as e:
-        raise ValueError(f"Unexpected error: {str(e)}")
 
 if __name__ == "__main__":
     config_path = str(sys.argv[1])
