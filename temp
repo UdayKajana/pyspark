@@ -1,159 +1,38 @@
-Broken DAG (dags/vz-it-j2lv-cmido-0/bdc_coverage/bdc_coverage.py):
-Traceback (most recent call last):
-  File "/home/airflow/gcs/dags/vz-it-j2lv-cmido-0/bdc_coverage/bdc_coverage.py", line 110, in <module>
-    dataproc_job = DataprocSubmitPySparkJobOperator(
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/models/baseoperator.py", line 420, in apply_defaults
-    raise AirflowException(f"missing keyword argument {missing_args.pop()!r}")
-airflow.exceptions.AirflowException: missing keyword argument 'main'
-
-
-
-
-
-
-
-import json
-import logging
+from jinja2 import Environment, FileSystemLoader
+import yaml
 import os
 import sys
-from datetime import datetime, timedelta
+def validate_file_path(file_path: str) -> bool:
+    """Validate if the file path has safe extension"""
+    _, ext = os.path.splitext(file_path)
+    return ext.lower() in ['.yml', '.yaml', '.jinja2', '.py']
 
-import google.cloud.logging
-import pendulum
-import yaml
-from airflow import models
-from airflow.operators.email import EmailOperator
-from airflow.operators.empty import EmptyOperator
-from airflow.operators.python import PythonOperator
-from airflow.providers.google.cloud.operators.dataproc import DataprocSubmitPySparkJobOperator
-from airflow.utils.email import send_email
-
-# Define failure alert function
-def failure_alert(context):
-    dag_id = context['dag'].dag_id
-    task_id = context['task_instance'].task_id
-    execution_date = context['execution_date']
+def create_dag_files(config_path, dag_files_path, project):
+    BASE_DIR = os.path.dirname(os.path.abspath((__file__)))
+    env = Environment(loader=FileSystemLoader(BASE_DIR))
+    template = env.get_template('template.jinja2')
+    if not validate_file_path(config_path):
+        raise ValueError(f"Invalid file path or extension: {config_path}")
     
-    email_subject = f"DAG {dag_id} - Task {task_id} Failed"
-    email_body = f"""
-    DAG: {dag_id}
-    Task: {task_id}
-    Execution Date: {execution_date}
-    Log URL: {context['task_instance'].log_url}
-    """
-    
-    send_email(
-        to=context['dag'].default_args['email'],
-        subject=email_subject,
-        html_content=email_body
-    )
+    with open(f"{config_path}", "r") as configfile:
+        config_data = yaml.safe_load(configfile)
+        markets = config_data[project][0]
+        market = {}
+        # print(markets)
+        for x in markets:
+            market['market_name'] = x['market_name']
+            market['technologies'] = x['technologies']
+            market['recon_days'] = x['recon_days']
+            market['ds'] = '{{ data_interval_end.strftime("%Y-%m-%d") }}'
+            market['ds_nodash'] = '{{ data_interval_end.strftime("%Y%m%d") }}'
+            market['schedule'] = x['schedule']
+            market['is_exists'] = "{{ task_instance.xcom_pull(task_ids='market_file_exists_check_task', key='market_exists') }}"
+            output_file = os.path.join(dag_files_path, f"dtwin_ran_invtry_nokia_{x['market_name']}.py")
+            with open(output_file, 'w+') as f:
+                f.write(template.render(market))
 
-# Define load_and_create_csv function
-def load_and_create_csv(**kwargs):
-    # Placeholder function - replace with actual implementation
-    task_logger = kwargs['task_logger']
-    task_logger.info("Running load_and_create_csv function")
-    # Add your specific data loading and CSV creation logic here
-
-BASE_DIR = '/home/airflow/gcs/dags/vz-it-j2lv-cmido-0'
-
-client = google.cloud.logging.Client()
-logger = client.logger(name="bdc_coverage")
-
-project = os.environ['GCP_PROJECT']
-
-# Load configuration
-with open(f"{BASE_DIR}/bdc_coverage/bdc_coverage.yml", 'r') as file:
-    data = yaml.safe_load(file)
-
-# Extract project-specific configuration
-config = next((value[project] for key, value in data.items() if project in value), None)
-if not config:
-    raise ValueError(f"No configuration found for project {project}")
-
-# Extract configuration variables
-project_config = config[0]
-variables = {
-    'project_id': project_config['project_id'],
-    'JOB_NAME': project_config['JOB_NAME'],
-    'region': project_config['region'],
-    'sa_conn_id': project_config['sa_conn_id'],
-    'config_location': project_config['config_location'],
-    'email_id': project_config['email_id'],
-    'priority': project_config['priority'],
-    'project_name': project_config['project_name'],
-}
-
-# DAG configuration
-dag_name = "bdc_coverage"
-schedule_interval = None
-
-default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    "start_date": datetime(2025, 1, 13),
-    'email': variables['email_id'],
-    'email_on_success': True,
-    'email_on_failure': True,
-    'email_on_retry': False,
-    'retries': 0,
-    "project_id": variables['project_id'],
-    "region": variables['region'],
-    'retry_delay': timedelta(minutes=10),
-    'on_failure_callback': failure_alert
-}
-
-with models.DAG(
-        dag_name,
-        tags=["bdc", "coverage", "bdc_coverage"],
-        default_args=default_args,
-        catchup=False,
-        schedule_interval=schedule_interval
-) as dag:
-    task_start = EmptyOperator(
-        task_id='start',
-        dag=dag)
-    
-    load_and_create_csv_task = PythonOperator(
-        task_id='trigger_dataproc_job',
-        python_callable=load_and_create_csv,
-        provide_context=True,
-        dag=dag)
-    
-    # Dataproc Submit Job Task
-    dataproc_job = DataprocSubmitPySparkJobOperator(
-        task_id='submit_dataproc_job',
-        main_python_file_uri='gs://your-bucket/bdc_coverage_job.py',  # Update with your GCS path
-        job_name=variables['JOB_NAME'],
-        cluster_name=f"{variables['project_name']}-cluster",
-        region=variables['region'],
-        project_id=variables['project_id'],
-        dataproc_job_args=[
-            json.dumps({
-                'project_id': variables['project_id'],
-                'job_name': variables['JOB_NAME'],
-                'metadata_file': 'raw_data.json',
-                'target_dataset': 'bdc_coverage',
-                'target_table': f"mobile_coverage_{datetime.now().strftime('%Y%m%d')}"
-            })
-        ],
-        dag=dag
-    )
-    
-    email_notify = EmailOperator(
-        task_id='email_notify',
-        to=variables['email_id'],
-        conn_id=variables['sa_conn_id'],
-        subject='Success: BDC Coverage is loaded successfully',
-        html_content='The data is loaded successfully',
-        trigger_rule='all_success',
-        dag=dag
-    )
-    
-    task_end = EmptyOperator(
-        task_id='end',
-        dag=dag)
-
-# Task Dependencies
-task_start >> load_and_create_csv_task >> dataproc_job >> email_notify >> task_end
+if __name__ == "__main__":
+    config_path = str(sys.argv[1])
+    dag_files_path = str(sys.argv[2])
+    project = str(sys.argv[3])
+    create_dag_files(config_path, dag_files_path, project)
