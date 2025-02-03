@@ -2,11 +2,13 @@ from jinja2 import Environment, FileSystemLoader
 import yaml
 import os
 import sys
+import re
+
 def validate_file_path(file_path: str) -> bool:
-    """Validate if the file path has safe extension"""
     _, ext = os.path.splitext(file_path)
     return ext.lower() in ['.yml', '.yaml', '.jinja2', '.py']
-
+def sanitize_filename(filename):
+    return re.sub(r'[^\w\-_\.]', '_', filename)
 def create_dag_files(config_path, dag_files_path, project):
     BASE_DIR = os.path.dirname(os.path.abspath((__file__)))
     env = Environment(loader=FileSystemLoader(BASE_DIR))
@@ -20,17 +22,16 @@ def create_dag_files(config_path, dag_files_path, project):
         market = {}
         # print(markets)
         for x in markets:
-            market['market_name'] = x['market_name']
             market['technologies'] = x['technologies']
             market['recon_days'] = x['recon_days']
             market['ds'] = '{{ data_interval_end.strftime("%Y-%m-%d") }}'
             market['ds_nodash'] = '{{ data_interval_end.strftime("%Y%m%d") }}'
             market['schedule'] = x['schedule']
             market['is_exists'] = "{{ task_instance.xcom_pull(task_ids='market_file_exists_check_task', key='market_exists') }}"
+            market['market_name'] = sanitize_filename(x['market_name']) 
             output_file = os.path.join(dag_files_path, f"dtwin_ran_invtry_nokia_{x['market_name']}.py")
             with open(output_file, 'w+') as f:
                 f.write(template.render(market))
-
 if __name__ == "__main__":
     config_path = str(sys.argv[1])
     dag_files_path = str(sys.argv[2])
