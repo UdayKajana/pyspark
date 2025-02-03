@@ -3,59 +3,98 @@ import yaml
 import os
 import sys
 import re
+from pathlib import Path
+from typing import Optional
 
 def validate_file_path(file_path: str) -> bool:
     """Validate if the file path has an allowed extension."""
-    _, ext = os.path.splitext(file_path)
-    return ext.lower() in ['.yml', '.yaml', '.jinja2', '.py']
+    if not file_path or not isinstance(file_path, str):
+        return False
+    
+    allowed_extensions = {'.yml', '.yaml', '.jinja2', '.py'}
+    return Path(file_path).suffix.lower() in allowed_extensions
 
-def sanitize_filename(filename):
+def sanitize_filename(filename: str) -> str:
+    """Sanitize filename to prevent directory traversal and invalid characters."""
+    if not filename or not isinstance(filename, str):
+        return ""
+    
+    # Remove any directory components
+    filename = os.path.basename(filename)
+    # Replace any non-alphanumeric characters (except -_.) with underscore
     return re.sub(r'[^\w\-_\.]', '_', filename)
 
-def validate_output_path(base_path: str, output_path: str) -> bool:
-    """
-    Validate that the output path is within the intended base directory.
-    """
-    base_abs = os.path.abspath(base_path)
-    output_abs = os.path.abspath(output_path)
-    return os.path.commonprefix([base_abs, output_abs]) == base_abs
+def is_safe_directory(directory: str) -> bool:
+    """Verify if the directory path is safe to use."""
+    try:
+        # Convert to absolute path
+        directory = os.path.abspath(directory)
+        # Check if directory exists and is actually a directory
+        return os.path.exists(directory) and os.path.isdir(directory)
+    except (TypeError, ValueError):
+        return False
 
-def create_dag_files(config_path, dag_files_path, project):
+def create_dag_files(config_path: str, dag_files_path: str, project: str) -> None:
+
+    # Validate all input parameters
+    if not all([config_path, dag_files_path, project]):
+        raise ValueError("All parameters must be non-empty strings")
+
+    # Verify config_path
+    if not validate_file_path(config_path):
+        raise ValueError(f"Invalid configuration file path or extension: {config_path}")
+    
+    # Verify dag_files_path
+    if not is_safe_directory(dag_files_path):
+        raise ValueError(f"Invalid or unsafe DAG files directory: {dag_files_path}")
+
+    # Get absolute path of the current file
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     
-    # Validate input paths
-    if not os.path.exists(dag_files_path) or not os.path.isdir(dag_files_path):
-        raise ValueError(f"Invalid DAG files directory: {dag_files_path}")
-    
-    env = Environment(loader=FileSystemLoader(BASE_DIR))
-    template = env.get_template('template.jinja2')
-    
-    if not validate_file_path(config_path):
-        raise ValueError(f"Invalid file path or extension: {config_path}")
-    
-    with open(f"{config_path}", "r") as configfile:
-        config_data = yaml.safe_load(configfile)
+    try:
+        # Set up Jinja2 environment
+        env = Environment(
+            loader=FileSystemLoader(BASE_DIR),
+            autoescape=True  # Enable autoescaping for security
+        )
+        template = env.get_template('template.jinja2')
+
+        # Read and parse configuration file
+        with open(config_path, "r", encoding='utf-8') as configfile:
+            config_data = yaml.safe_load(configfile)
+            
+        if not isinstance(config_data, dict) or project not in config_data:
+            raise ValueError(f"Invalid configuration data or project '{project}' not found")
+
         markets = config_data[project][0]
-        market = {}
         
-        for x in markets:
-            market['technologies'] = x['technologies']
-            market['recon_days'] = x['recon_days']
-            market['ds'] = '{{ data_interval_end.strftime("%Y-%m-%d") }}'
-            market['ds_nodash'] = '{{ data_interval_end.strftime("%Y%m%d") }}'
-            market['schedule'] = x['schedule']
-            market['is_exists'] = "{{ task_instance.xcom_pull(task_ids='market_file_exists_check_task', key='market_exists') }}"
-            market['market_name'] = sanitize_filename(x['market_name'])
-            
-            # Create and validate output path
-            output_file = os.path.join(dag_files_path, f"dtwin_ran_invtry_nokia_{x['market_name']}.py")
-            
-            # Check if output path is safe
-            if not validate_output_path(dag_files_path, output_file):
-                raise ValueError(f"Invalid output path detected: {output_file}")
-            
-            with open(output_file, 'w+') as f:
+        for market_config in markets:
+            market = {
+                'technologies': market_config.get('technologies', []),
+                'recon_days': market_config.get('recon_days', 0),
+                'ds': '{{ data_interval_end.strftime("%Y-%m-%d") }}',
+                'ds_nodash': '{{ data_interval_end.strftime("%Y%m%d") }}',
+                'schedule': market_config.get('schedule', ''),
+                'is_exists': "{{ task_instance.xcom_pull(task_ids='market_file_exists_check_task', key='market_exists') }}",
+                'market_name': sanitize_filename(market_config.get('market_name', ''))
+            }
+
+            if not market['market_name']:
+                continue 
+            output_filename = f"dtwin_ran_invtry_nokia_{market['market_name']}.py"
+            output_filename = sanitize_filename(output_filename)
+            output_path = os.path.join(os.path.abspath(dag_files_path), output_filename)
+
+            if not os.path.commonprefix([os.path.abspath(dag_files_path), output_path]) == os.path.abspath(dag_files_path):
+                raise ValueError(f"Invalid output path detected: {output_path}")
+
+            with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(template.render(market))
+
+    except (OSError, yaml.YAMLError) as e:
+        raise OSError(f"Error processing files: {str(e)}")
+    except Exception as e:
+        raise ValueError(f"Unexpected error: {str(e)}")
 
 if __name__ == "__main__":
     config_path = str(sys.argv[1])
