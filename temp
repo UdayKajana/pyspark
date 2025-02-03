@@ -4,92 +4,64 @@ import os
 import sys
 from pathlib import Path
 
-def validate_path(path):
+def validate_path(path, base_dir=None):
     try:
-        # Convert to Path object for platform-independent handling
-        path_obj = Path(path).resolve()
-        parent_dir = path_obj.parent
+        resolved_path = os.path.abspath(os.path.realpath(path))
+
+        # Prevent directory traversal if base_dir is provided
+        if base_dir and not resolved_path.startswith(os.path.abspath(base_dir)):
+            raise ValueError(f"Unauthorized access detected: {resolved_path}")
+
+        if not os.path.exists(os.path.dirname(resolved_path)):
+            raise ValueError(f"Directory does not exist: {os.path.dirname(resolved_path)}")
         
-        # Ensure parent directory exists and is absolute
-        if not parent_dir.exists() or not parent_dir.is_absolute():
-            raise ValueError(f"Invalid directory: {parent_dir}")
-            
-        # Convert back to string using os.fspath for platform-specific handling
-        return os.fspath(path_obj)
+        return resolved_path
     except Exception as e:
         raise ValueError(f"Invalid path: {str(e)}")
 
 def sanitize_filename(filename):
     valid_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.')
-    sanitized = ''.join(c for c in filename if c in valid_chars)
-    if not sanitized:
-        raise ValueError("Invalid filename after sanitization")
-    return sanitized
-
-def secure_open_read(filepath):
-    try:
-        path_obj = Path(filepath).resolve()
-        if not path_obj.is_file():
-            raise ValueError(f"File does not exist: {path_obj}")
-            
-        # Use Path.open() instead of built-in open()
-        return path_obj.open(mode='r', encoding='utf-8')
-    except Exception as e:
-        raise ValueError(f"Error opening file: {str(e)}")
-
-def secure_open_write(filepath, base_dir):
-    try:
-        path_obj = Path(filepath).resolve()
-        base_obj = Path(base_dir).resolve()
-        
-        if not base_obj.exists():
-            raise ValueError(f"Base directory does not exist: {base_obj}")
-            
-        # Check for path traversal
-        if not str(path_obj).startswith(str(base_obj)):
-            raise ValueError("Path traversal detected")
-            
-        # Create parent directories if needed
-        path_obj.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Use Path.open() instead of built-in open()
-        return path_obj.open(mode='w+', encoding='utf-8')
-    except Exception as e:
-        raise ValueError(f"Error opening file for writing: {str(e)}")
+    return ''.join(c for c in filename if c in valid_chars)
 
 def create_dag_files(config_path, dag_files_path, project):
     try:
-        safe_config_path = validate_path(config_path)
-        safe_dag_path = validate_path(dag_files_path)
-        
-        base_dir = Path(__file__).resolve().parent
-        env = Environment(loader=FileSystemLoader(os.fspath(base_dir)), autoescape=True)
+        BASE_DIR = Path(__file__).resolve().parent  # Ensure this is within a safe directory
+        safe_config_path = validate_path(config_path, BASE_DIR)
+        safe_dag_path = validate_path(dag_files_path, BASE_DIR)
+
+        # Restrict template loading to the script's directory
+        env = Environment(loader=FileSystemLoader(str(BASE_DIR)), autoescape=True)
         template = env.get_template('template.jinja2')
-        
-        with secure_open_read(safe_config_path) as configfile:
+
+        with open(safe_config_path, "r") as configfile:
             config_data = yaml.safe_load(configfile)
-            
-            if not isinstance(config_data, dict) or project not in config_data:
+
+            if project not in config_data:
                 raise ValueError(f"Project {project} not found in config")
-                
+
             markets = config_data[project][0]
-            market = {}
             
             for x in markets:
-                market['market_name'] = sanitize_filename(x['market_name'])
-                market['technologies'] = x['technologies']
-                market['recon_days'] = x['recon_days']
-                market['ds'] = '{{ data_interval_end.strftime("%Y-%m-%d") }}'
-                market['ds_nodash'] = '{{ data_interval_end.strftime("%Y%m%d") }}'
-                market['schedule'] = x['schedule']
-                market['is_exists'] = "{{ task_instance.xcom_pull(task_ids='market_file_exists_check_task', key='market_exists') }}"
-                
+                market = {
+                    'market_name': sanitize_filename(x['market_name']),
+                    'technologies': x['technologies'],
+                    'recon_days': x['recon_days'],
+                    'ds': '{{ data_interval_end.strftime("%Y-%m-%d") }}',
+                    'ds_nodash': '{{ data_interval_end.strftime("%Y%m%d") }}',
+                    'schedule': x['schedule'],
+                    'is_exists': "{{ task_instance.xcom_pull(task_ids='market_file_exists_check_task', key='market_exists') }}"
+                }
+
                 safe_output_filename = f"dtwin_ran_invtry_nokia_{market['market_name']}.py"
-                safe_output_path = Path(safe_dag_path).joinpath(safe_output_filename)
-                
-                with secure_open_write(safe_output_path, safe_dag_path) as f:
+                safe_output_path = os.path.join(safe_dag_path, safe_output_filename)
+
+                # Prevent directory traversal attack
+                if not os.path.abspath(safe_output_path).startswith(os.path.abspath(safe_dag_path)):
+                    raise ValueError("Path traversal detected")
+
+                with open(safe_output_path, 'w+') as f:
                     f.write(template.render(market))
-                    
+
     except Exception as e:
         raise RuntimeError(f"Error creating DAG files: {str(e)}")
 
@@ -97,7 +69,7 @@ if __name__ == "__main__":
     if len(sys.argv) != 4:
         print("Usage: script.py <config_path> <dag_files_path> <project>")
         sys.exit(1)
-        
+
     try:
         config_path = str(sys.argv[1])
         dag_files_path = str(sys.argv[2])
