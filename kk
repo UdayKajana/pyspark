@@ -13,12 +13,11 @@ class TemplateOptions(PipelineOptions):
     def _add_argparse_args(cls, parser):
         parser.add_value_provider_argument('--query', type=str)
 
-# Modified to use float instead of Decimal for nullable numeric fields
 class CDIKeysMutation(NamedTuple):
-    account_sk: Optional[float]  # Changed from Decimal to float
+    account_sk: Optional[float]
     mon: Optional[str]
-    cust_sk: Optional[float]     # Changed from Decimal to float
-    svc_party_sk: Optional[float]  # Changed from Decimal to float
+    cust_sk: Optional[float]
+    svc_party_sk: Optional[float]
     acct_estbd_dt: Optional[str]
     acct_term_dt: Optional[str]
     tenure_term_days: Optional[int]
@@ -43,13 +42,25 @@ class PrepareData(beam.DoFn):
         return value
 
     def transform_to_mutation(self, row):
-        # Convert Decimal to float and handle None values
+        # Enhanced conversion function to handle multiple types
         def convert_decimal(value):
             if value is None:
                 return None
-            if isinstance(value, Decimal):
-                return float(value)
-            return value
+            try:
+                if isinstance(value, Decimal):
+                    return float(value)
+                elif isinstance(value, str):
+                    # Remove any whitespace and handle empty strings
+                    cleaned_value = value.strip()
+                    if not cleaned_value:
+                        return None
+                    return float(cleaned_value)
+                elif isinstance(value, (int, float)):
+                    return float(value)
+                return value
+            except (ValueError, TypeError) as e:
+                logging.warning(f"Failed to convert value '{value}' to float: {str(e)}")
+                return None
 
         return CDIKeysMutation(
             account_sk=convert_decimal(row.get('acct_sk')),
