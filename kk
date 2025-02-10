@@ -13,11 +13,12 @@ class TemplateOptions(PipelineOptions):
     def _add_argparse_args(cls, parser):
         parser.add_value_provider_argument('--query', type=str)
 
+# Modified to use float instead of Decimal for nullable numeric fields
 class CDIKeysMutation(NamedTuple):
-    account_sk: Optional[Decimal]
+    account_sk: Optional[float]  # Changed from Decimal to float
     mon: Optional[str]
-    cust_sk: Optional[Decimal]
-    svc_party_sk: Optional[Decimal]
+    cust_sk: Optional[float]     # Changed from Decimal to float
+    svc_party_sk: Optional[float]  # Changed from Decimal to float
     acct_estbd_dt: Optional[str]
     acct_term_dt: Optional[str]
     tenure_term_days: Optional[int]
@@ -42,12 +43,19 @@ class PrepareData(beam.DoFn):
         return value
 
     def transform_to_mutation(self, row):
-        # Format dates while keeping other fields as is
+        # Convert Decimal to float and handle None values
+        def convert_decimal(value):
+            if value is None:
+                return None
+            if isinstance(value, Decimal):
+                return float(value)
+            return value
+
         return CDIKeysMutation(
-            account_sk=row.get('acct_sk'),
+            account_sk=convert_decimal(row.get('acct_sk')),
             mon=row.get('mon'),
-            cust_sk=row.get('cust_sk'),
-            svc_party_sk=row.get('svc_party_sk'),
+            cust_sk=convert_decimal(row.get('cust_sk')),
+            svc_party_sk=convert_decimal(row.get('svc_party_sk')),
             acct_estbd_dt=self.format_date(row.get('acct_estbd_dt')),
             acct_term_dt=self.format_date(row.get('acct_term_dt')),
             tenure_term_days=row.get('tenure_term_days')
@@ -108,29 +116,4 @@ if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
     known_args, beam_args = parse_arguments()
     run(known_args, beam_args)
-    print(f'Created template at {known_args.template_location}.') make this code to accept null values for columns svc_party_sk it is failing with the error: Error message from worker: org.apache.beam.sdk.util.UserCodeException: java.lang.NullPointerException: Null decimal at column svc_party_sk
-	org.apache.beam.sdk.util.UserCodeException.wrap(UserCodeException.java:39)
-	org.apache.beam.sdk.transforms.MapElements$2$DoFnInvoker.invokeProcessElement(Unknown Source)
-	org.apache.beam.fn.harness.FnApiDoFnRunner.processElementForParDo(FnApiDoFnRunner.java:810)
-	org.apache.beam.fn.harness.data.PCollectionConsumerRegistry$MetricTrackingFnDataReceiver.accept(PCollectionConsumerRegistry.java:348)
-	org.apache.beam.fn.harness.data.PCollectionConsumerRegistry$MetricTrackingFnDataReceiver.accept(PCollectionConsumerRegistry.java:275)
-	org.apache.beam.fn.harness.BeamFnDataReadRunner.forwardElementToConsumer(BeamFnDataReadRunner.java:213)
-	org.apache.beam.sdk.fn.data.BeamFnDataInboundObserver.multiplexElements(BeamFnDataInboundObserver.java:172)
-	org.apache.beam.sdk.fn.data.BeamFnDataInboundObserver.awaitCompletion(BeamFnDataInboundObserver.java:136)
-	org.apache.beam.fn.harness.control.ProcessBundleHandler.processBundle(ProcessBundleHandler.java:550)
-	org.apache.beam.fn.harness.control.BeamFnControlClient.delegateOnInstructionRequestType(BeamFnControlClient.java:150)
-	org.apache.beam.fn.harness.control.BeamFnControlClient$InboundObserver.lambda$onNext$0(BeamFnControlClient.java:115)
-	java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:515)
-	java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
-	org.apache.beam.sdk.util.UnboundedScheduledExecutorService$ScheduledFutureTask.run(UnboundedScheduledExecutorService.java:163)
-	java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1128)
-	java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:628)
-	java.base/java.lang.Thread.run(Thread.java:829)
-Caused by: java.lang.NullPointerException: Null decimal at column svc_party_sk
-	org.apache.beam.vendor.guava.v32_1_2_jre.com.google.common.base.Preconditions.checkNotNull(Preconditions.java:921)
-	org.apache.beam.sdk.io.gcp.spanner.MutationUtils.setBeamValueToMutation(MutationUtils.java:222)
-	org.apache.beam.sdk.io.gcp.spanner.MutationUtils.lambda$createMutationFromBeamRows$1(MutationUtils.java:100)
-	java.base/java.util.ArrayList.forEach(ArrayList.java:1541)
-	org.apache.beam.sdk.io.gcp.spanner.MutationUtils.createMutationFromBeamRows(MutationUtils.java:98)
-	org.apache.beam.sdk.io.gcp.spanner.MutationUtils.lambda$beamRowToMutationFn$ae3ac727$1(MutationUtils.java:75)
-	org.apache.beam.sdk.transforms.MapElements$2.processElement(MapElements.java:151)
+    print(f'Created template at {known_args.template_location}.')
