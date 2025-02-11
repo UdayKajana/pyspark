@@ -1,42 +1,72 @@
-function splitMultilineToRows() {
-  // Get the active spreadsheet and sheet
+function splitMultilineToNewSheet() {
+  // Get the active spreadsheet
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = spreadsheet.getActiveSheet();
+  var sourceSheet = spreadsheet.getActiveSheet();
   
-  // Get values from A1 and B1
-  var tablesList = sheet.getRange("A1").getValue();
-  var dataset = sheet.getRange("B1").getValue();
+  // Create new sheet with timestamp to avoid naming conflicts
+  var timestamp = new Date().toISOString().replace(/[:.]/g, '_');
+  var newSheet = spreadsheet.insertSheet('Split_Data_' + timestamp);
   
-  // Split the multiline text into array
-  var tables = tablesList.split("\n");
+  // Get all data from columns A and B
+  var lastRow = sourceSheet.getLastRow();
+  var rangeA = sourceSheet.getRange("A1:A" + lastRow).getValues();
+  var rangeB = sourceSheet.getRange("B1:B" + lastRow).getValues();
   
-  // Clear existing content (optional)
-  // Uncomment the next line if you want to clear existing data
-  // sheet.getRange("A1:B" + (sheet.getLastRow())).clearContent();
-  
-  // Create data array for batch update
+  // Array to hold all new rows
   var newData = [];
-  for (var i = 0; i < tables.length; i++) {
-    // Trim each table name to remove extra spaces
-    var tableName = tables[i].trim();
-    if (tableName) {  // Only add non-empty lines
-      newData.push([tableName, dataset]);
+  
+  // Process each row
+  for (var row = 0; row < rangeA.length; row++) {
+    var tablesList = rangeA[row][0];
+    var dataset = rangeB[row][0];
+    
+    // Skip if either cell is empty
+    if (!tablesList || !dataset) continue;
+    
+    // Split the multiline text into array
+    var tables = tablesList.toString().split("\n");
+    
+    // Add each table as a new row
+    for (var i = 0; i < tables.length; i++) {
+      var tableName = tables[i].trim();
+      if (tableName) {  // Only add non-empty lines
+        newData.push([tableName, dataset]);
+      }
     }
   }
   
-  // Write all data at once
+  // Write headers
+  newSheet.getRange(1, 1, 1, 2).setValues([['Table Name', 'Dataset']]);
+  newSheet.getRange(1, 1, 1, 2).setFontWeight('bold');
+  
+  // Write all data at once if we have any
   if (newData.length > 0) {
-    sheet.getRange(1, 1, newData.length, 2).setValues(newData);
+    newSheet.getRange(2, 1, newData.length, 2).setValues(newData);
   }
   
-  // Optional: Auto-resize columns to fit new content
-  sheet.autoResizeColumns(1, 2);
+  // Format the new sheet
+  newSheet.autoResizeColumns(1, 2);
+  
+  // Add alternating row colors for better readability
+  if (newData.length > 0) {
+    newSheet.getRange(2, 1, newData.length, 2).applyRowBanding();
+  }
+  
+  // Activate the new sheet
+  newSheet.activate();
+  
+  // Show completion message
+  SpreadsheetApp.getUi().alert(
+    'Process Complete',
+    'Created ' + newData.length + ' rows in new sheet "' + newSheet.getName() + '"',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
 }
 
 // Add a custom menu to run the script
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('Custom Scripts')
-    .addItem('Split Multiline to Rows', 'splitMultilineToRows')
+    .addItem('Split Multiline to New Sheet', 'splitMultilineToNewSheet')
     .addToUi();
 }
