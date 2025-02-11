@@ -1,64 +1,42 @@
-function splitMultilineRows() {
+function splitMultilineToRows() {
   // Get the active spreadsheet and sheet
-  var sheet = SpreadsheetApp.getActiveSheet();
-  var data = sheet.getDataRange().getValues();
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = spreadsheet.getActiveSheet();
   
-  // Create a new sheet for the results
-  var newSheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet('Split Results');
+  // Get values from A1 and B1
+  var tablesList = sheet.getRange("A1").getValue();
+  var dataset = sheet.getRange("B1").getValue();
   
-  // Array to store the new rows
+  // Split the multiline text into array
+  var tables = tablesList.split("\n");
+  
+  // Clear existing content (optional)
+  // Uncomment the next line if you want to clear existing data
+  // sheet.getRange("A1:B" + (sheet.getLastRow())).clearContent();
+  
+  // Create data array for batch update
   var newData = [];
-  
-  // Process each row
-  for (var i = 0; i < data.length; i++) {
-    var row = data[i];
-    var hasMultiline = false;
-    var maxLines = 1;
-    
-    // Find the maximum number of lines in any cell of the row
-    for (var j = 0; j < row.length; j++) {
-      if (typeof row[j] === 'string') {
-        var lines = row[j].split('\n');
-        if (lines.length > 1) {
-          hasMultiline = true;
-          maxLines = Math.max(maxLines, lines.length);
-        }
-      }
-    }
-    
-    // If row has multiline cells, split it
-    if (hasMultiline) {
-      for (var lineNum = 0; lineNum < maxLines; lineNum++) {
-        var newRow = [];
-        for (var j = 0; j < row.length; j++) {
-          if (typeof row[j] === 'string') {
-            var lines = row[j].split('\n');
-            newRow.push(lines[lineNum] || ''); // Push empty string if no content
-          } else {
-            newRow.push(lineNum === 0 ? row[j] : ''); // Only keep value in first row
-          }
-        }
-        newData.push(newRow);
-      }
-    } else {
-      // If no multiline cells, keep row as is
-      newData.push(row);
+  for (var i = 0; i < tables.length; i++) {
+    // Trim each table name to remove extra spaces
+    var tableName = tables[i].trim();
+    if (tableName) {  // Only add non-empty lines
+      newData.push([tableName, dataset]);
     }
   }
   
-  // Write the results to the new sheet
+  // Write all data at once
   if (newData.length > 0) {
-    newSheet.getRange(1, 1, newData.length, newData[0].length).setValues(newData);
-    
-    // Auto-resize columns
-    newSheet.autoResizeColumns(1, newData[0].length);
+    sheet.getRange(1, 1, newData.length, 2).setValues(newData);
   }
+  
+  // Optional: Auto-resize columns to fit new content
+  sheet.autoResizeColumns(1, 2);
 }
 
-// Add menu item to run the script
+// Add a custom menu to run the script
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
-  ui.createMenu('Split Tools')
-    .addItem('Split Multiline Rows', 'splitMultilineRows')
+  ui.createMenu('Custom Scripts')
+    .addItem('Split Multiline to Rows', 'splitMultilineToRows')
     .addToUi();
 }
