@@ -1,72 +1,71 @@
-function splitMultilineToNewSheet() {
-  // Get the active spreadsheet
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var sourceSheet = spreadsheet.getActiveSheet();
+function removeDuplicateRows() {
+  var ui = SpreadsheetApp.getUi();
   
-  // Create new sheet with timestamp to avoid naming conflicts
-  var timestamp = new Date().toISOString().replace(/[:.]/g, '_');
-  var newSheet = spreadsheet.insertSheet('Split_Data_' + timestamp);
+  // Confirm before proceeding
+  var response = ui.alert(
+    'Remove Duplicates',
+    'This will remove duplicate rows and keep only the first occurrence.\nDo you want to continue?',
+    ui.ButtonSet.YES_NO
+  );
   
-  // Get all data from columns A and B
-  var lastRow = sourceSheet.getLastRow();
-  var rangeA = sourceSheet.getRange("A1:A" + lastRow).getValues();
-  var rangeB = sourceSheet.getRange("B1:B" + lastRow).getValues();
+  if (response !== ui.Button.YES) {
+    return;
+  }
+
+  // Get the active sheet
+  var sheet = SpreadsheetApp.getActiveSheet();
+  var dataRange = sheet.getDataRange();
+  var data = dataRange.getValues();
   
-  // Array to hold all new rows
-  var newData = [];
+  // Exit if sheet is empty
+  if (data.length <= 1) {
+    ui.alert('Error', 'Sheet is empty or contains only headers.', ui.ButtonSet.OK);
+    return;
+  }
+
+  // Keep track of unique rows using their string representation
+  var seen = new Set();
+  var uniqueRows = [];
+  var duplicatesCount = 0;
   
-  // Process each row
-  for (var row = 0; row < rangeA.length; row++) {
-    var tablesList = rangeA[row][0];
-    var dataset = rangeB[row][0];
+  // Assuming first row is header
+  var header = data[0];
+  uniqueRows.push(header);
+  
+  // Check each row starting from index 1 (after header)
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var rowString = JSON.stringify(row);
     
-    // Skip if either cell is empty
-    if (!tablesList || !dataset) continue;
-    
-    // Split the multiline text into array
-    var tables = tablesList.toString().split("\n");
-    
-    // Add each table as a new row
-    for (var i = 0; i < tables.length; i++) {
-      var tableName = tables[i].trim();
-      if (tableName) {  // Only add non-empty lines
-        newData.push([tableName, dataset]);
-      }
+    if (!seen.has(rowString)) {
+      seen.add(rowString);
+      uniqueRows.push(row);
+    } else {
+      duplicatesCount++;
     }
   }
   
-  // Write headers
-  newSheet.getRange(1, 1, 1, 2).setValues([['Table Name', 'Dataset']]);
-  newSheet.getRange(1, 1, 1, 2).setFontWeight('bold');
+  // Clear the sheet and write unique rows
+  sheet.clearContents();
+  var newRange = sheet.getRange(1, 1, uniqueRows.length, uniqueRows[0].length);
+  newRange.setValues(uniqueRows);
   
-  // Write all data at once if we have any
-  if (newData.length > 0) {
-    newSheet.getRange(2, 1, newData.length, 2).setValues(newData);
-  }
-  
-  // Format the new sheet
-  newSheet.autoResizeColumns(1, 2);
-  
-  // Add alternating row colors for better readability
-  if (newData.length > 0) {
-    newSheet.getRange(2, 1, newData.length, 2).applyRowBanding();
-  }
-  
-  // Activate the new sheet
-  newSheet.activate();
+  // Auto-resize columns to fit content
+  sheet.autoResizeColumns(1, uniqueRows[0].length);
   
   // Show completion message
-  SpreadsheetApp.getUi().alert(
+  ui.alert(
     'Process Complete',
-    'Created ' + newData.length + ' rows in new sheet "' + newSheet.getName() + '"',
-    SpreadsheetApp.getUi().ButtonSet.OK
+    'Removed ' + duplicatesCount + ' duplicate rows.\n' +
+    'Remaining rows: ' + (uniqueRows.length - 1) + ' (excluding header)',
+    ui.ButtonSet.OK
   );
 }
 
-// Add a custom menu to run the script
+// Add custom menu
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('Custom Scripts')
-    .addItem('Split Multiline to New Sheet', 'splitMultilineToNewSheet')
+    .addItem('Remove Duplicate Rows', 'removeDuplicateRows')
     .addToUi();
 }
