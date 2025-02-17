@@ -21,9 +21,10 @@ def downloadZipFiles(file_path, zipfiles_directory, headers):
     with open(file_path, 'r') as file:
         data = json.load(file)
         for entry in data['data']:
-            if filecount < 124:
-                filecount = filecount + 1
-                continue
+            # Removed continue statement to process all files
+            # if filecount < 124:
+            #    filecount = filecount + 1
+            #    continue
             entry_id = entry['id']
             file_name = entry['file_name'] + '.zip'
             url = f"https://broadbandmap.fcc.gov/nbm/map/api/getNBMDataDownloadFile/{entry_id}/2"
@@ -31,6 +32,7 @@ def downloadZipFiles(file_path, zipfiles_directory, headers):
             print(file_name)
             
             response = requests.get(url, headers=headers)
+            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
             with open(os.path.join(zipfiles_directory, file_name), 'wb') as output_file:
                 output_file.write(response.content)
             time.sleep(45)
@@ -43,17 +45,24 @@ def unzipFiles(directory, output_directory):
     filtered = list(filtered)
     for file in filtered:
         if file.endswith('.zip'):
-            with zipfile.ZipFile(os.path.join(directory, file), 'r') as zip_ref:
-                zip_ref.extractall(output_directory)
+            try:
+                with zipfile.ZipFile(os.path.join(directory, file), 'r') as zip_ref:
+                    zip_ref.extractall(output_directory)
+            except zipfile.BadZipFile:
+                print(f"Skipping bad zip file: {file}")
 
 def convertToCsv(input_directory, output_directory):
     allFiles = os.listdir(input_directory)
     filtered = filter(lambda singleFile: singleFile.startswith('bdc_'), allFiles)
     filteredFiles = list(filtered)
     for file in filteredFiles:
-        gdf = gp.read_file(os.path.join(input_directory, file))
-        csv_filename = file[:file.index('.')] + '.csv'
-        gdf.to_csv(os.path.join(output_directory, csv_filename), index=False)
+        try:
+            gdf = gp.read_file(os.path.join(input_directory, file))
+            csv_filename = file[:file.index('.')] + '.csv'
+            gdf.to_csv(os.path.join(output_directory, csv_filename), index=False)
+        except Exception as e:
+            print(f"Error converting {file} to CSV: {e}")
+
 from google.cloud import storage
 
 def download_blob(bucket_name, source_blob_name, destination_file_name):
@@ -70,15 +79,22 @@ def download_blob(bucket_name, source_blob_name, destination_file_name):
 from google.cloud import bigquery
 import pandas as pd
 def upload_toBQ(file):
-    df = pd.read_csv(file,
-                      dtype={'frn': str, 'providerid': str, 'mindown': str, 
-                             'minup': str, 'minsignal': str, 'environmnt': str,
-                             'brandname': str, 'technology': str, 'geometry': str})  
-    client = bigquery.Client()
-    dataset_ref = client.dataset('market_intelligence_processed')
-    table_ref = dataset_ref.table('bdc_test_data1')
-    client.load_table_from_dataframe(df, table_ref).result()
-    print(f"Done with {file}")
+    try:
+        df = pd.read_csv(file,
+                          dtype={'frn': str, 'providerid': str, 'mindown': str,
+                                 'minup': str, 'minsignal': str, 'environmnt': str,
+                                 'brandname': str, 'technology': str, 'geometry': str})
+        client = bigquery.Client()
+        dataset_ref = client.dataset('market_intelligence_processed')
+        table_ref = dataset_ref.table('bdc_test_data1')
+        job = client.load_table_from_dataframe(df, table_ref)
+        job.result()  # Wait for the job to complete
+
+        print(f"Done with {file}")
+    except Exception as e:
+        print(f"Error uploading {file} to BigQuery: {e}")
+
+
 import os
 def list_files(path):
     for filename in os.listdir(path):
@@ -113,16 +129,19 @@ if __name__ == '__main__':
     except Exception as e:
         print("File Not found!")
     import os
-    os.mkdir('/tmp/bdc')
-    os.mkdir('/tmp/bdc/zipfiles')
-    os.mkdir('/tmp/bdc/gpkgfiles')
-    os.mkdir('/tmp/bdc/bdc_mobile_tmobile_processed')
+    os.makedirs('/tmp/bdc/zipfiles', exist_ok=True)
+    os.makedirs('/tmp/bdc/gpkgfiles', exist_ok=True)
+    os.makedirs('/tmp/bdc/bdc_mobile_tmobile_processed', exist_ok=True)
+
     zipfiles_directory = '/tmp/bdc/zipfiles'
     metadata_file = '/tmp/bdc/raw_data.json'
     raw_coverage_metadata_file = '/tmp/bdc/filtered_data.json'
-    data = {}
-    with open('/tmp/bdc/raw_data.json', 'w') as f:
-        json.dump(data, f)
+    
+    #Removed initial json, no need.
+    #data = {}
+    #with open('/tmp/bdc/raw_data.json', 'w') as f:
+    #    json.dump(data, f)
+    
     download_blob("us-east4-vz-it-dev-wdwg-aid-d64a7958-bucket","dags/vz-it-j2lv-cmido-0/bdc_coverage/raw_data.json","/tmp/bdc/raw_data.json")
     getRawCoverageMetadata(metadata_file, raw_coverage_metadata_file)
     downloadZipFiles(raw_coverage_metadata_file, zipfiles_directory, headers)
@@ -131,13 +150,3 @@ if __name__ == '__main__':
     csvfiles_directory = '/tmp/bdc/bdc_mobile_tmobile_processed'
     convertToCsv(gpkgfiles_directory, csvfiles_directory)
     pushToBQ(csvfiles_directory)
-
-the error is 
-
-Using the default container image
-Waiting for container log creation
-PYSPARK_PYTHON=/opt/dataproc/conda/bin/python
-JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
-SPARK_EXTRA_CLASSPATH=
-:: loading settings :: file = /etc/spark/conf/ivysettings.xml
-/opt/dataproc/conda/bin/python: can't find '__main__' module in '/var/dataproc/tmp/srvls-batch-eaf0c2a0-7036-4c84-8245-c93ba2d33017/dataproc_job.py/'
