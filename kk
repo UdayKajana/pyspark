@@ -7,6 +7,7 @@ import argparse
 import logging
 from typing import NamedTuple, Iterator, Optional
 from datetime import datetime
+from apache_beam.transforms.util import BatchElements
 
 class TemplateOptions(PipelineOptions):
     @classmethod
@@ -98,6 +99,7 @@ class PrepareSpannerData(beam.DoFn):
             logging.error(f"Error processing element: {element}")
             logging.error(f"Error details: {str(e)}")
             return
+
     def format_date(self, value):
         """Convert date/datetime to string format."""
         if value is None:
@@ -149,6 +151,7 @@ class PrepareSpannerData(beam.DoFn):
             data_circuit_id=element.get('data_circuit_id'),
             video_circuit_id=self.safe_str(element.get('video_circuit_id'))
         )
+
 def run(known_args, beam_args):
     options = {
         'project': known_args.project,
@@ -171,9 +174,13 @@ def run(known_args, beam_args):
                 subscription=f"{known_args.pubsub_subscription_name}")
             | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
         )
-        windowed_data = (data | "Windowing" >> beam.WindowInto(beam.Windowing))
-        _ = (data
+        windowed_data = (data 
+            | "Windowing" >> beam.WindowInto(beam.window.FixedWindows(2 * 60))  # 2-minute windows
+        batched_data = (windowed_data
             | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
+            | "Batch Elements" >> BatchElements(min_batch_size=100, max_batch_size=7000)  # Adjust batch size as needed
+        )
+        _ = (batched_data
             | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
                 instance_id=known_args.spanner_instance,
                 database_id=known_args.spanner_dataset,
