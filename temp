@@ -1,3 +1,12 @@
+Using the default container image
+Waiting for container log creation
+PYSPARK_PYTHON=/opt/dataproc/conda/bin/python
+JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
+SPARK_EXTRA_CLASSPATH=
+:: loading settings :: file = /etc/spark/conf/ivysettings.xml
+/opt/dataproc/conda/bin/python: can't find '__main__' module in '/var/dataproc/tmp/srvls-batch-eaf0c2a0-7036-4c84-8245-c93ba2d33017/dataproc_job.py/'
+
+
 import json
 import requests
 import time
