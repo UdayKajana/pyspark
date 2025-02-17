@@ -1,160 +1,3 @@
-import json
-import avro.io as avro_io
-import avro.schema
-from io import BytesIO
-from avro.datafile import DataFileReader, DataFileWriter
-import io
-import logging
-import argparse
-from subprocess import getoutput
-import random
-def pushToTopic(data_rows, topic_name):
-    from concurrent import futures
-    from google.cloud import pubsub_v1
-    from google.cloud.pubsub_v1.types import (
-        LimitExceededBehavior,
-        PublisherOptions,
-        PublishFlowControl,
-    )
-
-    # TODO(developer)
-    project_id = "vz-it-np-gudv-dev-vzntdo-0"
-    topic_id = topic_name  # "dflow_test"
-
-    # Configure how many messages the publisher client can hold in memory
-    # and what to do when messages exceed the limit.
-    publisher = pubsub_v1.PublisherClient()
-
-    topic_path = publisher.topic_path(project_id, topic_id)
-
-    publish_futures = []
-
-    # Resolve the publish future in a separate thread.
-    def callback(publish_future: pubsub_v1.publisher.futures.Future) -> None:
-        message_id = publish_future.result()
-        # print(message_id)
-    publish_future = publisher.publish(topic_path, data_rows)
-    print(publish_future)
-    # future.result(timeout=10)
-    # Non-blocking. Allow the publisher client to batch messages.
-    publish_future.add_done_callback(callback)
-    publish_futures.append(publish_future)
-    print(f"Published messages with flow control settings to {topic_path}.")
-
-def EncodeAvro(element):
-    def encode(data: dict) -> bytes:
-        schema = """{"namespace": "com.vz.vznet",
-                                                               "type": "record",
-                                                               "name": "VznetDefault",
-                                                               "doc": "Default schema for events in transit",
-                                                               "fields": [
-                                                               {"name": "timestamp", "type": "long"},
-                                                               {"name": "host", "type": "string"},
-                                                               {"name": "src",  "type": "string" },
-                                                               {"name": "_event_ingress_ts", "type": "long"},
-                                                               {"name": "_event_origin", "type": "string"},
-                                                               {"name": "_event_tags", "type": {"type": "array", "items": "string"}},
-                                                               {"name": "_event_route", "type": "string"},
-                                                               {"name": "_event_metrics", "type": ["null", "bytes"], "default": null},
-                                                               {"name": "rawdata", "type": "bytes"}
-                                                               ]
-                                                               }"""
-        if isinstance(schema, dict):
-            schema = json.dumps(schema)
-        if isinstance(data, str):
-            data = json.loads(data)
-        schema: str = avro.schema.parse(schema)
-        val = data
-        # dataFile = open(file, "wb")
-        # val[DefaultValues.EVENT_METRICS] = bytes(str(val.get(DefaultValues.EVENT_METRICS)), 'utf-8')
-        datum_writer: avro_io.DatumWriter = avro_io.DatumWriter(schema)
-        bytes_writer: io.BytesIO = io.BytesIO()
-        encoder: avro_io.BinaryEncoder = avro_io.BinaryEncoder(bytes_writer)
-        datum_writer.write(val, encoder)
-        raw_bytes: bytes = bytes_writer.getvalue()
-        return raw_bytes
-
-    raw_data = element['rawdata']
-    final_dict = {}
-    final_dict['timestamp'] = element['timestamp']
-    final_dict['src'] = element['src']
-    final_dict['host'] = element['host']
-    final_dict['_event_ingress_ts'] = element['ingressTimestamp']
-    final_dict['_event_origin'] = '|'.join(element['origins'])
-    final_dict["rawdata"] = json.dumps(raw_data)
-    final_dict['_event_tags'] = element['tags']
-    final_dict['_event_route'] = str(element['route'])
-    final_dict['_event_metrics'] = None
-    final_dict["rawdata"] = bytes(json.dumps(raw_data), 'utf-8')
-    return encode(final_dict)
-from datetime import datetime
-import random
-import string
-import time
-def generate_random_string(length):
-  """Generates a random string of specified length."""
-  characters = string.ascii_letters + string.digits
-  return ''.join(random.choice(characters) for _ in range(length))
-
-random_string = generate_random_string(20)
-while True:
-    pipTopologySrc = {
-        "input": [
-            {"src": "vz.pip.eclipse.stat.if_stats.proc.v0", 
-             "timestamp": 1563152004139, 
-             "host": "TEST-1234-XYZ",
-             "ingressTimestamp": 1563153004139, 
-             "fetchTimestamp": 1563153008139, 
-             "origins": ["vmb,kafka,ENMV.PIP.IP"],
-             "tags": [], "route": 3,
-                "rawdata": {
-                 "ont_activation_date": "2019-08-28 04:00:00.000000 UTC",
-                 "data_circuit_id" : "A6o6LHciNWfMMDXRAk/AmzSqPzZU3lHpzvpeWb0487+2CKWc6iSMbMf+z7sLju0UiEj/jLnGDmcLlU5t5llkug==",
-                 "circuit_id" : f'{generate_random_string(20)}',
-                 "video_circuit_id" :  f'{generate_random_string(20)}',
-                 "service_type" : "BWLHiXyrs2l8/F7ldbmoRsIY7WQhFyX3euXshykBAALkRUlgQLvnnltzAp/ymwFAjc0Auk7LVFC4InQT+g5/1Q==",
-                 "address_id" : 17935568585.0,
-                 "vision_account_id" : "ZcXG3TS/LG7ymRvKTaf4C7lUgLMO3MVHIhhQ74DRZ9Y6opYN1hADfRhn4SA+eXs5kbweoYtXXeAVLyo8XD1ioQ==",
-                 "vision_customer_id" : "Tz1bRQ1Md58vddT9EfHmU3LvXtmlDB4CDpLWNFRmI7wg4gFO9lSIEbNXNQAJiVqZIU2/dcdEjaZLlGHhFD4H0g==",
-                 "address_type" : "SFU",
-                 "line_of_business" : "Residence"
-             }
-            },
-            {"src": "vz.pip.eclipse.stat.if_stats.proc.v0", 
-             "timestamp": 1563152004139, 
-             "host": "TEST-1234-XYZ",
-             "ingressTimestamp": 1563153004139, 
-             "fetchTimestamp": 1563153008139, 
-             "origins": ["vmb,kafka,ENMV.PIP.IP"],
-             "tags": [], 
-             "route": 3,
-            "rawdata": {
-                 "ont_activation_date": "2019-08-28 04:00:00.000000 UTC",
-                 "data_circuit_id" : "A6o6LHciNWfMMDXRAk/AmzSqPzZU3lHpzvpeWb0487+2CKWc6iSMbMf+z7sLju0UiEj/jLnGDmcLlU5t5llkug==",
-                 "circuit_id" : f'{generate_random_string(20)}',
-                 "video_circuit_id" : f'{generate_random_string(20)}',
-                 "service_type" : "BWLHiXyrs2l8/F7ldbmoRsIY7WQhFyX3euXshykBAALkRUlgQLvnnltzAp/ymwFAjc0Auk7LVFC4InQT+g5/1Q==",
-                 "address_id" : 17935568585.0,
-                 "vision_account_id" : "ZcXG3TS/LG7ymRvKTaf4C7lUgLMO3MVHIhhQ74DRZ9Y6opYN1hADfRhn4SA+eXs5kbweoYtXXeAVLyo8XD1ioQ==",
-                 "vision_customer_id" : "Tz1bRQ1Md58vddT9EfHmU3LvXtmlDB4CDpLWNFRmI7wg4gFO9lSIEbNXNQAJiVqZIU2/dcdEjaZLlGHhFD4H0g==",
-                 "address_type" : "SFU",
-                 "line_of_business" : "Residence"
-             }
-            }
-            ]
-        }
-    for i in pipTopologySrc['input']:
-        e = EncodeAvro(i)
-        pushToTopic(e, "wireline_churn_test_topic")
-        time.sleep(5)
-
-
-
-this is my pushing datat to the topic.
-
-
-
-
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.io.gcp.pubsub import ReadFromPubSub
@@ -164,33 +7,25 @@ import argparse
 import logging
 from typing import NamedTuple, Iterator, Optional
 from datetime import datetime
-from apache_beam.transforms.window import FixedWindows
-from apache_beam.transforms.trigger import AfterWatermark, AccumulationMode
-import random
-import string
-import avro.schema
-import avro.io
-from io import BytesIO
-import time
 
 class TemplateOptions(PipelineOptions):
     @classmethod
     def _add_argparse_args(cls, parser):
         parser.add_value_provider_argument('--params', type=str)
 
-class InventoryCustomerProfilesMutation(NamedTuple):
-    provisioning_date: Optional[str]
-    data_circuit_id: Optional[str]
+class ConvertToSpannerMutation(NamedTuple):
+    telephone_number: Optional[str]
+    trouble_report_number: Optional[str]
+    address_id: Optional[str]
+    chronic_flag: Optional[str]
+    chronic_total: Optional[str]
     circuit_id: Optional[str]
+    circuit_type: Optional[str]
+    reported_ts: Optional[str]
+    data_circuit_id: Optional[str]
     video_circuit_id: Optional[str]
-    service_type: Optional[str]
-    address_id: Optional[int]
-    vision_account_id: Optional[str]
-    vision_customer_id: Optional[str]
-    address_type: Optional[str]
-    line_of_business: Optional[str]
 
-beam.coders.registry.register_coder(InventoryCustomerProfilesMutation, beam.coders.RowCoder)
+beam.coders.registry.register_coder(ConvertToSpannerMutation, beam.coders.RowCoder)
 
 class DecodeAvroRecords(beam.DoFn):
     def process(self, element) -> Iterator[dict]:
@@ -237,6 +72,8 @@ class DecodeAvroRecords(beam.DoFn):
                         {"name": "rawdata", "type": "bytes"}
                         ]}"""
         try:
+            if isinstance(raw_schema, dict):
+                raw_schema = json.dumps(raw_schema)
             schema = avro.schema.parse(raw_schema)
             avro_reader = avro_io.DatumReader(schema)
             avro_message = avro_io.BinaryDecoder(BytesIO(element))
@@ -254,27 +91,13 @@ class DecodeAvroRecords(beam.DoFn):
             return
 
 class PrepareSpannerData(beam.DoFn):
-    def process(self, element) -> Iterator[InventoryCustomerProfilesMutation]:
+    def process(self, element) -> Iterator[ConvertToSpannerMutation]:
         try:
             yield self.transform_to_mutation(element)
         except Exception as e:
             logging.error(f"Error processing element: {element}")
             logging.error(f"Error details: {str(e)}")
             return
-
-    def format_timestamp(self,value):
-        try:
-            raw_value = float(value)
-            if raw_value <= 0:
-                raw_value = 0
-            elif raw_value > 2240611199 * 1000:
-                raw_value = 2240611199 * 1000 # date=2040-12-31
-
-            casted_t_value = datetime.fromtimestamp(raw_value / 1000)
-            return casted_t_value.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-        except Exception as e:
-            logging.error(f"CUSTOM_ERROR_LOG: Timestamp formatting error: {str(e)}; /n value={value}")
-            return None
     def format_date(self, value):
         """Convert date/datetime to string format."""
         if value is None:
@@ -286,36 +109,46 @@ class PrepareSpannerData(beam.DoFn):
                 return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
             return value
         except Exception as e:
-            logging.error(f"CUSTOM_ERROR_LOG: Date formatting error: {str(e)}")
+            logging.error(f"Date formatting error: {str(e)}")
             return None
-
-    def safe_int(self, value):
-        """Safely convert value to int."""
+    
+    def safe_str(self, value):
+        """Safely convert value to string."""
         if value is None:
             return None
         try:
-            return int(value)
-        except (ValueError, TypeError):
+            return str(value)
+        except Exception:
             return None
 
-    def transform_to_mutation(self, element):
-        return InventoryCustomerProfilesMutation(
-            provisioning_date=self.format_timestamp(element.get('ont_activation_date')),
+    def transform_to_mutation(self, element: dict):
+        if not isinstance(element, dict):
+            logging.error(f"Expected dictionary, got {type(element)}")
+            return None
+            
+        # Extract nested rawdata if present
+        if 'rawdata' in element:
+            try:
+                if isinstance(element['rawdata'], str):
+                    element = json.loads(element['rawdata'])
+                elif isinstance(element['rawdata'], dict):
+                    element = element['rawdata']
+            except json.JSONDecodeError as e:
+                logging.error(f"Error decoding rawdata: {str(e)}")
+                return None
+            
+        return ConvertToSpannerMutation(
+            telephone_number=element.get('telephone_number'),
+            trouble_report_number=element.get('trouble_report_num'),
+            address_id=element.get('address_id'),
+            chronic_flag=element.get('chronic_flag'),
+            chronic_total=element.get('chronic_total'),
+            circuit_id=element.get('line_id_trimmed'),
+            circuit_type=element.get('port_associated_service'),
+            reported_ts=self.format_date(element.get('date_opened')),
             data_circuit_id=element.get('data_circuit_id'),
-            circuit_id=element.get('circuit_id'),
-            video_circuit_id=element.get('video_circuit_id'),
-            service_type=element.get('service_type'),
-            address_id=self.safe_int(element.get('address_id')),
-            vision_account_id=element.get('vision_account_id'),
-            vision_customer_id=element.get('vision_customer_id'),
-            address_type=element.get('address_type'),
-            line_of_business=element.get('line_of_business')
+            video_circuit_id=self.safe_str(element.get('video_circuit_id'))
         )
-
-class BatchElements(beam.DoFn):
-    def process(self, elements):
-        yield elements
-
 def run(known_args, beam_args):
     options = {
         'project': known_args.project,
@@ -333,40 +166,24 @@ def run(known_args, beam_args):
     pipeline_options = PipelineOptions.from_dictionary(options)
     
     with beam.Pipeline(options=pipeline_options) as p:
-        # Read and decode data
-        data = (p
-                | "Read From Pubsub" >> ReadFromPubSub(
-                    subscription=f"{known_args.pubsub_subscription_name}")
-                | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
-                )
-
-        # Process and batch data
-        mutations = (data
-                     | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
-                     # Add timestamp to enable windowing
-                     | 'Add Timestamps' >> beam.Map(lambda x: beam.window.TimestampedValue(x, beam.utils.timestamp.Timestamp.now()))
-                     | 'Window' >> beam.WindowInto(
-                         FixedWindows(120),  # 2 minutes in seconds
-                         trigger=AfterWatermark(),
-                         accumulation_mode=AccumulationMode.DISCARDING
-                     )
-                     | 'Global Window' >> beam.GroupByKey()
-                     | 'Flatten Groups' >> beam.FlatMap(lambda x: x[1])
-                     )
-
-        # Write to Spanner
-        _ = (mutations
-             | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
-                 instance_id=known_args.spanner_instance,
-                 database_id=known_args.spanner_dataset,
-                 project_id=known_args.spanner_project,
-                 table=known_args.spanner_table,
-                 expansion_service=known_args.expansion_service,
-                 commit_deadline=30,
-                 max_number_mutations=7000,
-                 high_priority=True
-             )
-             )
+        data = (p 
+            | "Read From Pubsub" >> ReadFromPubSub(
+                subscription=f"{known_args.pubsub_subscription_name}")
+            | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
+        )
+        windowed_data = (data | "Windowing" >> beam.WindowInto(beam.Windowing))
+        _ = (data
+            | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
+            | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
+                instance_id=known_args.spanner_instance,
+                database_id=known_args.spanner_dataset,
+                project_id=known_args.spanner_project,
+                table=known_args.spanner_table,
+                expansion_service=known_args.expansion_service,
+                max_number_mutations=7000,
+                high_priority=True
+            )
+        )
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -377,9 +194,7 @@ def parse_arguments():
     parser.add_argument('--temp_location', required=True, help='Temp GCS bucket path')
     parser.add_argument('--template_location', required=True, help='GCS bucket path to save template')
     parser.add_argument('--pubsub_subscription_name', required=True, help='Input Subscription')
-    parser.add_argument('--sdk_container_image',
-                        default='us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/wireline:1.0.0',
-                        help='sdk_container_image location')
+    parser.add_argument('--sdk_container_image', default='us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/wireline:1.0.0', help='sdk_container_image location')
     parser.add_argument('--spanner_dataset', required=True, help='spanner dataset')
     parser.add_argument('--spanner_instance', required=True, help='spanner instance')
     parser.add_argument('--spanner_project', required=True, help='spanner project')
@@ -391,105 +206,4 @@ if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
     known_args, beam_args = parse_arguments()
     run(known_args, beam_args)
-    print(f'Created template at {known_args.template_location}.')  
-
-
-this is my pipeline of loading above data and sending to spanner.....
-
-
-Error message from worker: generic::unknown: Traceback (most recent call last):
-  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 917, in apache_beam.runners.common.PerWindowInvoker.invoke_process
-  File "apache_beam/runners/common.py", line 1059, in apache_beam.runners.common.PerWindowInvoker._invoke_process_per_window
-  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
-  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
-  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
-  File "apache_beam/runners/worker/operations.py", line 525, in apache_beam.runners.worker.operations.Operation.process
-  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/bundle_processor.py", line 158, in process
-    self.windowed_coder_impl.encode_to_stream(
-  File "apache_beam/coders/coder_impl.py", line 1446, in apache_beam.coders.coder_impl.WindowedValueCoderImpl.encode_to_stream
-  File "apache_beam/coders/coder_impl.py", line 1465, in apache_beam.coders.coder_impl.WindowedValueCoderImpl.encode_to_stream
-  File "apache_beam/coders/coder_impl.py", line 1021, in apache_beam.coders.coder_impl.AbstractComponentCoderImpl.encode_to_stream
-ValueError: Number of components does not match number of coders.
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 311, in _execute
-    response = task()
-  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 386, in <lambda>
-    lambda: self.create_worker().do_instruction(request), request)
-  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 656, in do_instruction
-    return getattr(self, request_type)(
-  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 694, in process_bundle
-    bundle_processor.process_bundle(instruction_id))
-  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/bundle_processor.py", line 1119, in process_bundle
-    input_op_by_transform_id[element.transform_id].process_encoded(
-  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/bundle_processor.py", line 237, in process_encoded
-    self.output(decoded_value)
-  File "apache_beam/runners/worker/operations.py", line 567, in apache_beam.runners.worker.operations.Operation.output
-  File "apache_beam/runners/worker/operations.py", line 569, in apache_beam.runners.worker.operations.Operation.output
-  File "apache_beam/runners/worker/operations.py", line 260, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
-  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
-  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 1592, in apache_beam.runners.common.DoFnRunner._reraise_augmented
-  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
-  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
-  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
-  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
-  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 1592, in apache_beam.runners.common.DoFnRunner._reraise_augmented
-  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
-  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
-  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
-  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
-  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 1592, in apache_beam.runners.common.DoFnRunner._reraise_augmented
-  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
-  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
-  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
-  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
-  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 1592, in apache_beam.runners.common.DoFnRunner._reraise_augmented
-  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
-  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
-  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
-  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
-  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 1613, in apache_beam.runners.common.DoFnRunner._reraise_augmented
-  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 917, in apache_beam.runners.common.PerWindowInvoker.invoke_process
-  File "apache_beam/runners/common.py", line 1059, in apache_beam.runners.common.PerWindowInvoker._invoke_process_per_window
-  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
-  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
-  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
-  File "apache_beam/runners/worker/operations.py", line 525, in apache_beam.runners.worker.operations.Operation.process
-  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/bundle_processor.py", line 158, in process
-    self.windowed_coder_impl.encode_to_stream(
-  File "apache_beam/coders/coder_impl.py", line 1446, in apache_beam.coders.coder_impl.WindowedValueCoderImpl.encode_to_stream
-  File "apache_beam/coders/coder_impl.py", line 1465, in apache_beam.coders.coder_impl.WindowedValueCoderImpl.encode_to_stream
-  File "apache_beam/coders/coder_impl.py", line 1021, in apache_beam.coders.coder_impl.AbstractComponentCoderImpl.encode_to_stream
-ValueError: Number of components does not match number of coders. [while running 'Window-ptransform-43']
-
-passed through:
-==>
-    dist_proc/dax/workflow/worker/fnapi_service_impl.cc:1316
-
-
-and below is the error I am getting, please fix the data generation in push code onle:
-
-
+    print(f'Created template at {known_args.template_location}.')
