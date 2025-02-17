@@ -10,7 +10,7 @@ from airflow import models
 from airflow.operators.email import EmailOperator
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
-from airflow.providers.google.cloud.operators.dataproc import DataprocSubmitJobOperator
+from airflow.providers.google.cloud.operators.dataproc import DataprocCreateBatchOperator
 from functools import partial
 
 BASE_DIR = '/home/airflow/gcs/dags/vz-it-j2lv-cmido-0'
@@ -43,7 +43,7 @@ for key, value in data.items():
                 mi_artifactory_bucket = i['mi_artifactory_bucket']
                 region = i['region']
                 sa_conn_id = i['sa_conn_id']
-                cluster_name = i['cluster_name']
+                subnet = i['subnet']
                 src_script_location = i['src_script_location']
                 main_script = i['main_script']
                 config_location = i['config_location']
@@ -54,7 +54,6 @@ for key, value in data.items():
                 dag_email_recipient = i['email_id']
                 application_name = i['application_name']
                 j2lv_service_account = i['j2lv_service_account']
-                subnet = i['subnet']
                 kms_key = i['kms_key']
                 metastore_service = i['metastore_service']
                 priority = i['priority']
@@ -101,10 +100,9 @@ default_args = {
     'on_failure_callback': failure_alert
 }
 
-PYSPARK_JOB = {
-    "reference": {"project_id": project_id},
-    "placement": {"cluster_name": cluster_name},
-    "pyspark_job": {
+# Serverless Batch Configuration
+BATCH_CONFIG = {
+    "pyspark_batch": {
         "main_python_file_uri": "gs://us-east4-vz-it-dev-wdwg-aid-d64a7958-bucket/dags/vz-it-j2lv-cmido-0/bdc_coverage/dataproc_job.py",
         "args": [
             "--frequency", "{{ params.frequency }}",
@@ -112,6 +110,23 @@ PYSPARK_JOB = {
             "--backfill_start_dt", "{{ params.backfill_start_dt }}",
             "--backfill_end_dt", "{{ params.backfill_end_dt }}"
         ],
+        "jar_file_uris": [spark_jar_uri] if spark_jar_uri else [],
+    },
+    "environment_config": {
+        "execution_config": {
+            "service_account": j2lv_service_account,
+            "subnetwork_uri": subnet,
+            "kms_key": kms_key
+        },
+        "peripherals_config": {
+            "metastore_service": metastore_service,
+            "spark_history_server_config": {
+                "dataproc_cluster": f"projects/{project_id}/regions/{region}/clusters/{cluster_name}"
+            }
+        }
+    },
+    "runtime_config": {
+        "version": "2.1",
         "properties": {
             "spark.driver.cores": "4",
             "spark.executor.cores": "4",
@@ -121,7 +136,12 @@ PYSPARK_JOB = {
             "spark.dynamicAllocation.executorAllocationRatio": "0.6",
             "spark.executor.instances": "2",
             "spark.dynamicAllocation.minExecutors": "2",
-            "spark.dynamicAllocation.maxExecutors": "32"
+            "spark.dynamicAllocation.maxExecutors": "32",
+            # Add these properties to ensure external URL access
+            "spark.hadoop.fs.gs.implicit.dir.repair.enable": "false",
+            "spark.hadoop.google.cloud.auth.service.account.enable": "true",
+            "spark.hadoop.fs.gs.project.id": project_id,
+            "spark.hadoop.google.cloud.auth.service.account.json.keyfile": j2lv_service_account
         }
     }
 }
@@ -146,11 +166,12 @@ with models.DAG(
         dag=dag
     )
 
-    submit_job = DataprocSubmitJobOperator(
+    submit_job = DataprocCreateBatchOperator(
         task_id="bdc_raw_coverage",
         project_id=project_id,
         region=region,
-        job=PYSPARK_JOB,
+        batch=BATCH_CONFIG,
+        batch_id=f"bdc-coverage-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
         gcp_conn_id=sa_conn_id,
         on_failure_callback=partial(observability_step_email, variables, step=3),
         on_success_callback=partial(observability_step_email, variables, step=3)
