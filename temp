@@ -1,320 +1,234 @@
+import apache_beam as beam 
+from apache_beam.options.pipeline_options import PipelineOptions
+from apache_beam.io.gcp.pubsub import ReadFromPubSub
+import apache_beam.io.gcp.spanner as sp
+import json
+import argparse
 import logging
-import os
-import sys
-from datetime import datetime, timezone, timedelta
+from typing import NamedTuple, Iterator, Optional
+from datetime import datetime
+from apache_beam.transforms.window import FixedWindows, TimestampCombiner
+from apache_beam.transforms.trigger import AfterWatermark, AccumulationMode
 
-import google.cloud.logging
-import pendulum
-import yaml
-from airflow import models
-from airflow.operators.email import EmailOperator
-from airflow.operators.empty import EmptyOperator
-from airflow.operators.python import PythonOperator
-from airflow.providers.google.cloud.operators.dataproc import DataprocCreateBatchOperator
-from functools import partial
+class TemplateOptions(PipelineOptions):
+    @classmethod
+    def _add_argparse_args(cls, parser):
+        parser.add_value_provider_argument('--params', type=str)
 
-BASE_DIR = '/home/airflow/gcs/dags/vz-it-j2lv-cmido-0'
-sys.path.append(f"{BASE_DIR}/dags/common")
-task_logger = logging.getLogger('airflow.task')
-client = google.cloud.logging.Client()
-logger = client.logger(name="cqes_rule_based_daily")
+class InventoryCustomerProfilesMutation(NamedTuple):
+    provisioning_date: Optional[str]
+    data_circuit_id: Optional[str] 
+    circuit_id: Optional[str]
+    video_circuit_id: Optional[str]
+    service_type: Optional[str]
+    address_id: Optional[int]
+    vision_account_id: Optional[str]
+    vision_customer_id: Optional[str]
+    address_type: Optional[str]
+    line_of_business: Optional[str]
 
-project = os.environ['GCP_PROJECT']
+beam.coders.registry.register_coder(InventoryCustomerProfilesMutation, beam.coders.RowCoder)
 
-# observability
-MI_ABSOLUTE_PATH = r'/home/airflow/gcs/dags/vz-it-j2lv-cmido-0/observability'
-sys.path.append(f"{MI_ABSOLUTE_PATH}")
+class DecodeAvroRecords(beam.DoFn):
+    def process(self, element) -> Iterator[dict]:
+        import avro.io as avro_io
+        import avro.schema
+        from io import BytesIO
+        import time
 
-from aid_observability import observability_step_email
+        def reformat_input_msg_schema(msg):
+            fmt_msg = {}
+            fmt_msg['timestamp'] = msg['timestamp']
+            fmt_msg['host'] = msg['host']
+            fmt_msg['src'] = msg['src']
+            fmt_msg['ingressTimestamp'] = msg['_event_ingress_ts']
+            fmt_msg['origins'] = [msg['_event_origin']]
+            tags_len = len(msg['_event_tags'])
+            if tags_len > 0:
+                if msg['_event_tags'][0] != "" and msg['_event_tags'][0] is not None:
+                    fmt_msg['tags'] = msg['_event_tags']
+                else:
+                    fmt_msg['tags'] = ['Dummy']
+            else:
+                fmt_msg['tags'] = ['Dummy']
+            fmt_msg['route'] = 3
+            fmt_msg['fetchTimestamp'] = int(time.time() * 1000)
+            fmt_msg['rawdata'] = msg['rawdata']
+            
+            return json.loads(fmt_msg['rawdata'])
 
-# Read the YML file and pass the respective parameters based on the GCP project
-with open(f"{BASE_DIR}/config/bdc_coverage.yaml", 'r') as file:
-    data = yaml.full_load(file)
-
-# Initialize variables dictionary with all required keys
-variables = {
-    'steps': {
-        3: {
-            'src_table': None,
-            'target_table': None
-        }
-    },
-    'opsgenie_api_key': None  # Initialize opsgenie_api_key
-}
-
-# Process YAML configuration
-for key, value in data.items():
-    for key1, value1 in value.items():
-        if key1 == project:
-            dict = value1
-            for i in dict:
-                project_id = i['project_id']
-                JOB_NAME = i['JOB_NAME']
-                PROCESS_NAME = i['PROCESS_NAME']
-                dag_bucket = i['dag_bucket']
-                mi_artifactory_bucket = i['mi_artifactory_bucket']
-                region = i['region']
-                sa_conn_id = i['sa_conn_id']
-                subnet = i['subnet']
-                cluster_name = i['cluster_name']
-                src_script_location = i['src_script_location']
-                main_script = i['main_script']
-                config_location = i['config_location']
-                constants = i['constants']
-                functions = i['functions']
-                queries = i['queries']
-                spark_jar_uri = i['spark_jar_uri']
-                dag_email_recipient = i['email_id']
-                application_name = i['application_name']
-                j2lv_service_account = i['j2lv_service_account']
-                kms_key = i['kms_key']
-                metastore_service = i['metastore_service']
-                priority = i['priority']
-                critical_priority = i['critical_priority']
-                critical_day = i['critical_day']
-                project_name = i['project_name']
-                job_frequency = i['job_frequency']
+        message: dict = {}
+        raw_schema = """{"namespace": "com.vz.vznet",
+                        "type": "record",
+                        "name": "VznetDefault",
+                        "doc": "Default schema for events in transit",
+                        "fields": [
+                        {"name": "timestamp", "type": "long"},
+                        {"name": "host", "type": "string"},
+                        {"name": "src",  "type": "string" },
+                        {"name": "_event_ingress_ts", "type": "long"},
+                        {"name": "_event_origin", "type": "string"},
+                        {"name": "_event_tags", "type": {"type": "array", "items": "string"}},
+                        {"name": "_event_route", "type": "string"},
+                        {"name": "_event_metrics", "type": ["null", "bytes"], "default": null},
+                        {"name": "rawdata", "type": "bytes"}
+                        ]}"""
+        try:
+            schema = avro.schema.parse(raw_schema)
+            avro_reader = avro_io.DatumReader(schema)
+            avro_message = avro_io.BinaryDecoder(BytesIO(element))
+            message = avro_reader.read(avro_message)
+            
+            if schema.name == 'VznetDefault':
+                message['rawdata'] = message['rawdata'].decode("utf-8")
+                message['_event_metrics'] = message['_event_metrics'].decode("utf-8") if message['_event_metrics'] is not None else None
                 
-                # Update variables dictionary
-                variables['steps'][3]['src_table'] = i['src_table']
-                variables['steps'][3]['target_table'] = i['target_table']
-                variables['opsgenie_api_key'] = i['opsgenie_api_key']
-            break
+            reformatted = reformat_input_msg_schema(message)
+            yield reformatted
+            
+        except Exception as e:
+            logging.error(f"Error processing message: {str(e)}")
+            return
 
-def failure_alert(**kwargs):
-    email = EmailOperator(
-        task_id="send_failed_task",
-        to=dag_email_recipient,
-        subject="BDC Dag Failed",
-        html_content=" Task" + " Failed",
-        dag=dag
-    )
-    email.execute(context=kwargs)
+class PrepareSpannerData(beam.DoFn):
+    def process(self, element) -> Iterator[InventoryCustomerProfilesMutation]:
+        try:
+            yield self.transform_to_mutation(element)
+        except Exception as e:
+            logging.error(f"Error processing element: {element}")
+            logging.error(f"Error details: {str(e)}")
+            return
 
-default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    "start_date": datetime(2025, 1, 24),
-    'email': dag_email_recipient,
-    'email_on_success': True,
-    'email_on_failure': True,
-    'email_on_retry': False,
-    'retries': 0,
-    "project_id": project_id,
-    "region": region,
-    'retry_delay': timedelta(minutes=10),
-    'on_failure_callback': failure_alert
-}
+    def format_timestamp(self,value):
+        try:
+            raw_value = float(value)
+            if raw_value <= 0:
+                raw_value = 0
+            elif raw_value > 2240611199 * 1000:
+                raw_value = 2240611199 * 1000 # date=2040-12-31
 
-# Define history server log directory
-HISTORY_SERVER_LOG_DIR = f"gs://{dag_bucket}/spark-history-logs"
+            casted_t_value = datetime.fromtimestamp(raw_value / 1000)
+            return casted_t_value.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        except Exception as e:
+            logging.error(f"CUSTOM_ERROR_LOG: Timestamp formatting error: {str(e)}; /n value={value}")
+            return None
 
-# Updated Serverless Batch Configuration
-BATCH_CONFIG = {
-    "pyspark_batch": {
-        "main_python_file_uri": f"gs://{dag_bucket}/dags/vz-it-j2lv-cmido-0/bdc_coverage/dataproc_job.py",
-        "args": [
-            "--frequency", "{{ params.frequency }}",
-            "--backfill", "{{ params.backfill }}",
-            "--backfill_start_dt", "{{ params.backfill_start_dt }}",
-            "--backfill_end_dt", "{{ params.backfill_end_dt }}"
-        ],
-        "jar_file_uris": [spark_jar_uri] if spark_jar_uri else [],
-    },
-    "environment_config": {
-        "execution_config": {
-            "service_account": j2lv_service_account,
-            "subnetwork_uri": subnet,
-            "kms_key": kms_key
-        },
-        "peripherals_config": {
-            "metastore_service": metastore_service,
-            "spark_history_server_config": {
-                "dataproc_cluster": f"projects/{project_id}/regions/{region}/clusters/{cluster_name}"
-            }
-        }
-    },
-    "runtime_config": {
-        "version": "2.1",
-        "properties": {
-            "spark.driver.cores": "4",
-            "spark.executor.cores": "4",
-            "spark.executor.memory": "6g",
-            "spark.driver.memory": "6g",
-            "spark.dynamicAllocation.enabled": "true",
-            "spark.dynamicAllocation.executorAllocationRatio": "0.6",
-            "spark.executor.instances": "2",
-            "spark.dynamicAllocation.minExecutors": "2",
-            "spark.dynamicAllocation.maxExecutors": "32",
-            "spark.hadoop.fs.gs.implicit.dir.repair.enable": "false",
-            "spark.hadoop.google.cloud.auth.service.account.enable": "true",
-            "spark.hadoop.fs.gs.project.id": project_id,
-            "spark.hadoop.google.cloud.auth.service.account.json.keyfile": j2lv_service_account,
+    def format_date(self, value):
+        """Convert date/datetime to string format."""
+        if value is None:
+            return None
+        try:
+            if isinstance(value, str):
+                # Remove microseconds if present
+                dt = datetime.strptime(value.split('.')[0], '%Y-%m-%d %H:%M:%S')
+                return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+            return value
+        except Exception as e:
+            logging.error(f"CUSTOM_ERROR_LOG: Date formatting error: {str(e)}")
+            return None
 
-        }
+    def safe_int(self, value):
+        """Safely convert value to int."""
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return None
+
+    def transform_to_mutation(self, element):
+        return InventoryCustomerProfilesMutation(
+            provisioning_date=self.format_timestamp(element.get('ont_activation_date')),
+            data_circuit_id=element.get('data_circuit_id'),
+            circuit_id=element.get('circuit_id'),
+            video_circuit_id=element.get('video_circuit_id'),
+            service_type=element.get('service_type'),
+            address_id=self.safe_int(element.get('address_id')),
+            vision_account_id=element.get('vision_account_id'),
+            vision_customer_id=element.get('vision_customer_id'),
+            address_type=element.get('address_type'),
+            line_of_business=element.get('line_of_business')
+        )
+
+class BatchElements(beam.DoFn):
+    def process(self, elements):
+        # elements will be a list of InventoryCustomerProfilesMutation objects
+        # from the same window
+        yield elements
+
+def run(known_args, beam_args):
+    options = {
+        'project': known_args.project,
+        'runner': known_args.runner,
+        'region': known_args.region,
+        'staging_location': known_args.staging_location,
+        'temp_location': known_args.temp_location,
+        'template_location': known_args.template_location,
+        'save_main_session': True,
+        'streaming': True,
+        'sdk_container_image': known_args.sdk_container_image,
+        'sdk_location': 'container'
     }
-}
 
-with models.DAG(
-        "dg_bdc_raw_coverage",
-        tags=["bdc", "coverage", "bdc_coverage"],
-        default_args=default_args,
-        catchup=False,
-        schedule_interval=None,
-        params={
-            "frequency": "daily",
-            "backfill": "False",
-            "backfill_start_dt": "2023-12-01",
-            "backfill_end_dt": "2023-12-31",
-            "run_date": "dummy_date"
-        }
-) as dag:
+    pipeline_options = PipelineOptions.from_dictionary(options)
     
-    task_start = EmptyOperator(
-        task_id='start',
-        dag=dag
-    )
+    with beam.Pipeline(options=pipeline_options) as p:
+        # Read and decode data
+        data = (p 
+            | "Read From Pubsub" >> ReadFromPubSub(
+                subscription=f"{known_args.pubsub_subscription_name}")
+            | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
+        )
 
-    submit_job = DataprocCreateBatchOperator(
-        task_id="bdc_raw_coverage",
-        project_id=project_id,
-        region=region,
-        batch=BATCH_CONFIG,
-        batch_id=f"bdc-coverage-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
-        gcp_conn_id=sa_conn_id,
-        on_failure_callback=partial(observability_step_email, variables, step=3),
-        on_success_callback=partial(observability_step_email, variables, step=3)
-    )
+        # Process and batch data
+        mutations = (data
+            | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
+            # Add timestamp to enable windowing
+            | 'Add Timestamps' >> beam.Map(lambda x: beam.window.TimestampedValue(x, beam.utils.timestamp.Timestamp.now()))
+            # Window into 2-minute fixed windows
+            | 'Window' >> beam.WindowInto(
+                FixedWindows(120),  # 2 minutes in seconds
+                trigger=AfterWatermark(),
+                accumulation_mode=AccumulationMode.DISCARDING
+            )
+            # Group all elements in the window together
+            | 'Global Window' >> beam.GroupByKey().without_defaults()
+            | 'Flatten Groups' >> beam.FlatMap(lambda x: x[1])
+        )
 
-    task_end = EmptyOperator(
-        task_id='end',
-        dag=dag,
-        on_failure_callback=partial(observability_step_email, variables, step=5),
-        on_success_callback=partial(observability_step_email, variables, step=5)
-    )
+        # Write to Spanner
+        _ = (mutations
+            | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
+                instance_id=known_args.spanner_instance,
+                database_id=known_args.spanner_dataset,
+                project_id=known_args.spanner_project,
+                table=known_args.spanner_table,
+                expansion_service=known_args.expansion_service,
+                commit_deadline=30,
+                max_number_mutations=7000,
+                high_priority=True
+            )
+        )
 
-    task_start >> submit_job >> task_end
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--project', required=True, help='GCP Project ID')
+    parser.add_argument('--runner', default="DataflowRunner", help='Pipeline runner')
+    parser.add_argument('--region', default="us-east4", help='GCP project region')
+    parser.add_argument('--staging_location', required=True, help='Staging GCS bucket path')
+    parser.add_argument('--temp_location', required=True, help='Temp GCS bucket path')
+    parser.add_argument('--template_location', required=True, help='GCS bucket path to save template')
+    parser.add_argument('--pubsub_subscription_name', required=True, help='Input Subscription')
+    parser.add_argument('--sdk_container_image', default='us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/wireline:1.0.0', help='sdk_container_image location')
+    parser.add_argument('--spanner_dataset', required=True, help='spanner dataset')
+    parser.add_argument('--spanner_instance', required=True, help='spanner instance')
+    parser.add_argument('--spanner_project', required=True, help='spanner project')
+    parser.add_argument('--spanner_table', required=True, help='spanner table')
+    parser.add_argument('--expansion_service', default='localhost:50768', help='Expansion service host:port')
+    return parser.parse_known_args()
 
-
-
-
-[2025-02-17, 10:36:48 UTC] {client.py:110} INFO - OpenLineageClient will use `http` transport
-[2025-02-17, 10:36:53 UTC] {adapter.py:163} WARNING - Failed to emit OpenLineage event of id 0195137b-2fe6-7c06-b2cd-9bfdc82688a2
-[2025-02-17, 10:36:53 UTC] {connection.py:232} WARNING - Connection schemes (type: google_cloud_platform) shall not contain '_' according to RFC3986.
-[2025-02-17, 10:36:53 UTC] {base.py:73} INFO - Using connection ID '***' for task execution.
-[2025-02-17, 10:36:53 UTC] {dataproc.py:2998} INFO - Creating batch bdc-coverage-20250217-103647
-[2025-02-17, 10:36:53 UTC] {dataproc.py:2999} INFO - Once started, the batch job will be available at https://console.cloud.google.com/dataproc/batches/us-east4/bdc-coverage-20250217-103647/monitoring?project=vz-it-np-j2lv-dev-cmido-0
-[2025-02-17, 10:36:53 UTC] {warnings.py:110} WARNING - /opt/python3.11/lib/python3.11/site-packages/airflow/providers/openlineage/utils/utils.py:541: AirflowProviderDeprecationWarning: Call to deprecated class UnknownOperatorAttributeRunFacet. (To be removed in the next release. Make sure to use information from AirflowRunFacet instead.)
-  UnknownOperatorAttributeRunFacet(
-
-[2025-02-17, 10:36:53 UTC] {warnings.py:110} WARNING - /opt/python3.11/lib/python3.11/site-packages/airflow/providers/openlineage/plugins/adapter.py:93: DeprecationWarning: `OpenLineageClient.from_environment()` is deprecated. Use `OpenLineageClient()`.
-  self._client = OpenLineageClient.from_environment()
-
-[2025-02-17, 10:36:53 UTC] {client.py:110} INFO - OpenLineageClient will use `http` transport
-[2025-02-17, 10:36:58 UTC] {adapter.py:163} WARNING - Failed to emit OpenLineage event of id 0195137b-2fe6-7c06-b2cd-9bfdc82688a2
-[2025-02-17, 10:36:59 UTC] {taskinstance.py:1939} ERROR - Task failed with exception
-Traceback (most recent call last):
-  File "/opt/python3.11/lib/python3.11/site-packages/google/api_core/grpc_helpers.py", line 76, in error_remapped_callable
-    return callable_(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/grpc/_channel.py", line 1176, in __call__
-    return _end_unary_response_blocking(state, call, False, None)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/grpc/_channel.py", line 1005, in _end_unary_response_blocking
-    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
-	status = StatusCode.INVALID_ARGUMENT
-	details = "Dataproc Cluster 'projects/vz-it-np-j2lv-dev-cmido-0/regions/us-east4/clusters/vz-it-np-j2lv-cmido-teradata' must have the property 'spark:spark.history.fs.logDirectory' configured to act as a Spark history server"
-	debug_error_string = "UNKNOWN:Error received from peer ipv4:63.22.171.3:443 {grpc_message:"Dataproc Cluster \'projects/vz-it-np-j2lv-dev-cmido-0/regions/us-east4/clusters/vz-it-np-j2lv-cmido-teradata\' must have the property \'spark:spark.history.fs.logDirectory\' configured to act as a Spark history server", grpc_status:3, created_time:"2025-02-17T10:36:53.942701467+00:00"}"
->
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/providers/google/cloud/operators/dataproc.py", line 3005, in execute
-    self.operation = hook.create_batch(
-                     ^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/providers/google/common/hooks/base_google.py", line 486, in inner_wrapper
-    return func(self, *args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/providers/google/cloud/hooks/dataproc.py", line 969, in create_batch
-    result = client.create_batch(
-             ^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/google/cloud/dataproc_v1/services/batch_controller/client.py", line 826, in create_batch
-    response = rpc(
-               ^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/google/api_core/gapic_v1/method.py", line 131, in __call__
-    return wrapped_func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/google/api_core/grpc_helpers.py", line 78, in error_remapped_callable
-    raise exceptions.from_grpc_error(exc) from exc
-google.api_core.exceptions.InvalidArgument: 400 Dataproc Cluster 'projects/vz-it-np-j2lv-dev-cmido-0/regions/us-east4/clusters/vz-it-np-j2lv-cmido-teradata' must have the property 'spark:spark.history.fs.logDirectory' configured to act as a Spark history server
-[2025-02-17, 10:36:59 UTC] {taskinstance.py:1401} INFO - Marking task as FAILED. dag_id=dg_bdc_raw_coverage, task_id=bdc_raw_coverage, execution_date=20250217T103635, start_date=20250217T103648, end_date=20250217T103659
-[2025-02-17, 10:36:59 UTC] {warnings.py:110} WARNING - /opt/python3.11/lib/python3.11/site-packages/airflow/utils/email.py:154: RemovedInAirflow3Warning: Fetching SMTP credentials from configuration variables will be deprecated in a future release. Please set credentials using a connection instead.
-  send_mime_email(e_from=mail_from, e_to=recipients, mime_msg=msg, conn_id=conn_id, dryrun=dryrun)
-
-[2025-02-17, 10:36:59 UTC] {configuration.py:1067} WARNING - section/key [smtp/smtp_user] not found in config
-[2025-02-17, 10:36:59 UTC] {email.py:270} INFO - Email alerting: attempt 1
-[2025-02-17, 10:36:59 UTC] {email.py:281} INFO - Sent an alert email to ['vuyyuri.trilok.narayana.varma@verizon.com']
-[2025-02-17, 10:36:59 UTC] {taskinstance.py:1707} ERROR - Error when executing partial callback
-Traceback (most recent call last):
-  File "/opt/python3.11/lib/python3.11/site-packages/google/api_core/grpc_helpers.py", line 76, in error_remapped_callable
-    return callable_(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/grpc/_channel.py", line 1176, in __call__
-    return _end_unary_response_blocking(state, call, False, None)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/grpc/_channel.py", line 1005, in _end_unary_response_blocking
-    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
-	status = StatusCode.INVALID_ARGUMENT
-	details = "Dataproc Cluster 'projects/vz-it-np-j2lv-dev-cmido-0/regions/us-east4/clusters/vz-it-np-j2lv-cmido-teradata' must have the property 'spark:spark.history.fs.logDirectory' configured to act as a Spark history server"
-	debug_error_string = "UNKNOWN:Error received from peer ipv4:63.22.171.3:443 {grpc_message:"Dataproc Cluster \'projects/vz-it-np-j2lv-dev-cmido-0/regions/us-east4/clusters/vz-it-np-j2lv-cmido-teradata\' must have the property \'spark:spark.history.fs.logDirectory\' configured to act as a Spark history server", grpc_status:3, created_time:"2025-02-17T10:36:53.942701467+00:00"}"
->
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 1519, in _run_raw_task
-    self._execute_task_with_callbacks(context, test_mode, session=session)
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 1683, in _execute_task_with_callbacks
-    result = self._execute_task(context, task_orig)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 1746, in _execute_task
-    result = execute_callable(context=context, **execute_callable_kwargs)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/providers/google/cloud/operators/dataproc.py", line 3005, in execute
-    self.operation = hook.create_batch(
-                     ^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/providers/google/common/hooks/base_google.py", line 486, in inner_wrapper
-    return func(self, *args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/providers/google/cloud/hooks/dataproc.py", line 969, in create_batch
-    result = client.create_batch(
-             ^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/google/cloud/dataproc_v1/services/batch_controller/client.py", line 826, in create_batch
-    response = rpc(
-               ^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/google/api_core/gapic_v1/method.py", line 131, in __call__
-    return wrapped_func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/google/api_core/grpc_helpers.py", line 78, in error_remapped_callable
-    raise exceptions.from_grpc_error(exc) from exc
-google.api_core.exceptions.InvalidArgument: 400 Dataproc Cluster 'projects/vz-it-np-j2lv-dev-cmido-0/regions/us-east4/clusters/vz-it-np-j2lv-cmido-teradata' must have the property 'spark:spark.history.fs.logDirectory' configured to act as a Spark history server
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 1704, in _run_finished_callback
-    callback(context)
-  File "/home/airflow/gcs/dags/vz-it-j2lv-cmido-0/observability/aid_observability.py", line 16, in observability_step_
-[2025-02-17, 10:36:59 UTC] {} INFO - email
-    BASE_DIR = variables['base_dir']
-               ~~~~~~~~~^^^^^^^^^^^^
-KeyError: 'base_dir'
-[2025-02-17, 10:36:59 UTC] {standard_task_runner.py:104} ERROR - Failed to execute job 13046653 for task bdc_raw_coverage (400 Dataproc Cluster 'projects/vz-it-np-j2lv-dev-cmido-0/regions/us-east4/clusters/vz-it-np-j2lv-cmido-teradata' must have the property 'spark:spark.history.fs.logDirectory' configured to act as a Spark history server; 215966)
-[2025-02-17, 10:36:59 UTC] {local_task_job_runner.py:228} INFO - Task exited with return code 1
-[2025-02-17, 10:36:59 UTC] {taskinstance.py:2781} INFO - 0 downstream tasks scheduled from follow-on schedule check
-Version: 2.7.3+composer
+if __name__ == '__main__':
+    logging.getLogger().setLevel(logging.INFO)
+    known_args, beam_args = parse_arguments()
+    run(known_args, beam_args)
+    print(f'Created template at {known_args.template_location}.')
