@@ -31,6 +31,18 @@ from aid_observability import observability_step_email
 with open(f"{BASE_DIR}/config/bdc_coverage.yaml", 'r') as file:
     data = yaml.full_load(file)
 
+# Initialize variables dictionary with all required keys
+variables = {
+    'steps': {
+        3: {
+            'src_table': None,
+            'target_table': None
+        }
+    },
+    'opsgenie_api_key': None  # Initialize opsgenie_api_key
+}
+
+# Process YAML configuration
 for key, value in data.items():
     for key1, value1 in value.items():
         if key1 == project:
@@ -62,19 +74,12 @@ for key, value in data.items():
                 critical_day = i['critical_day']
                 project_name = i['project_name']
                 job_frequency = i['job_frequency']
-                src_table = i["src_table"]
-                target_table = i["target_table"]
-                base_dir = i["base_dir"]
-                opsgenie_api_key = i["opsgenie_api_key"]
+                
+                # Update variables dictionary
+                variables['steps'][3]['src_table'] = i['src_table']
+                variables['steps'][3]['target_table'] = i['target_table']
+                variables['opsgenie_api_key'] = i['opsgenie_api_key']
             break
-
-# Variables
-variables = {'steps': {
-     3: {
-         'src_table': src_table,
-         'target_table': target_table
-     }
-}}
 
 def failure_alert(**kwargs):
     email = EmailOperator(
@@ -101,10 +106,13 @@ default_args = {
     'on_failure_callback': failure_alert
 }
 
-# Serverless Batch Configuration
+# Define history server log directory
+HISTORY_SERVER_LOG_DIR = f"gs://{dag_bucket}/spark-history-logs"
+
+# Updated Serverless Batch Configuration
 BATCH_CONFIG = {
     "pyspark_batch": {
-        "main_python_file_uri": "gs://us-east4-vz-it-dev-wdwg-aid-d64a7958-bucket/dags/vz-it-j2lv-cmido-0/bdc_coverage/dataproc_job.py",
+        "main_python_file_uri": f"gs://{dag_bucket}/dags/vz-it-j2lv-cmido-0/bdc_coverage/dataproc_job.py",
         "args": [
             "--frequency", "{{ params.frequency }}",
             "--backfill", "{{ params.backfill }}",
@@ -138,11 +146,14 @@ BATCH_CONFIG = {
             "spark.executor.instances": "2",
             "spark.dynamicAllocation.minExecutors": "2",
             "spark.dynamicAllocation.maxExecutors": "32",
-            # Add these properties to ensure external URL access
             "spark.hadoop.fs.gs.implicit.dir.repair.enable": "false",
             "spark.hadoop.google.cloud.auth.service.account.enable": "true",
             "spark.hadoop.fs.gs.project.id": project_id,
-            "spark.hadoop.google.cloud.auth.service.account.json.keyfile": j2lv_service_account
+            "spark.hadoop.google.cloud.auth.service.account.json.keyfile": j2lv_service_account,
+            # Add Spark History Server configuration
+            "spark.eventLog.enabled": "true",
+            "spark.eventLog.dir": HISTORY_SERVER_LOG_DIR,
+            "spark.history.fs.logDirectory": HISTORY_SERVER_LOG_DIR
         }
     }
 }
@@ -186,182 +197,3 @@ with models.DAG(
     )
 
     task_start >> submit_job >> task_end
-
-with this code I am getting below error project with yaml:
-  vz-it-np-wdwg-dev-aidcom-0:
-    -
-      project_id: vz-it-np-j2lv-dev-cmido-0
-      JOB_NAME: cqes_rules_based_scoring
-      PROCESS_NAME: rules_based_scoring
-      dag_bucket: us-east4-vz-it-dev-wdwg-aid-d64a7958-bucket
-      mi_artifactory_bucket: vz-it-np-j2lv-dev-cmido-0-mi-artifactory
-      region: us-east4
-      sa_conn_id: sa-vz-it-j2lv-cmido-0-app
-      cluster_name: vz-it-np-j2lv-cmido-teradata
-      src_script_location: cqes/rule_based_scoring/1.1/
-      main_script: cqes_rules_based_scoring.py
-      config_location: cqes/rule_based_scoring/
-      constants: cqes_rules_based_scoring_constants.py
-      functions: cqes_rules_based_scoring_functions.py
-      queries: cqes_rules_based_scoring_queries.py
-      spark_jar_uri: gs://vz-it-np-j2lv-dev-cmido-0-mi-artifactory/facebook-metadata/jar/spark-bigquery-with-dependencies_2.12-0.27.1.jar
-      email_id : vuyyuri.trilok.narayana.varma@verizon.com
-      application_name : MARKET_INTELLIGENCE
-      j2lv_service_account : sa-dev-j2lv-app-cmido-0@vz-it-np-j2lv-dev-cmido-0.iam.gserviceaccount.com
-      subnet : projects/vz-it-np-exhv-sharedvpc-228116/regions/us-east4/subnetworks/shared-np-east-green-subnet-1
-      kms_key : projects/vz-it-np-d0sv-vsadkms-0/locations/us-east4/keyRings/vz-it-np-kr-aid/cryptoKeys/vz-it-np-kms-j2lv
-      metastore_service : projects/vz-it-np-wdwg-dev-aidcom-0/locations/us-east4/services/vz-dev-wdwg-aidcom-dpms
-      project_name : cQES Rule Based Scoring
-      priority : P3
-      critical_priority : P3
-      critical_day : Monday
-      job_frequency : daily
-      base_dir : /home/airflow/gcs/dags/vz-it-j2lv-cmido-0
-      src_table : vz-it-pr-j2lv-cmido-0.market_intelligence_crowdsourced_processed_rd_v.tutela_raw_data,vz-it-pr-j2lv-cmido-0.market_intelligence_shapefiles_rd_v.census_tract2020,vz-it-pr-j2lv-cmido-0.market_intelligence_shapefiles_rd_v.census_2020,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_census_tract_mapping,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_cma_mapping,vz-it-pr-j2lv-cmido-0.cqes_rd_v.cqes_rootmetrics_results_per_cma,vz-it-pr-j2lv-cmido-0.market_intelligence_summary_rd_v.ookla_coverage_maps_pop_covered
-      target_table : vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_ct_dly_summary,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_ct_dly,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_ct_dly_wide,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_cma_dly,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_cma_dly_wide
-      opsgenie_api_key : c519ffac-8894-4188-9e5a-f1926ca480a2
-
-  vz-it-pr-wdwg-aidcom-0:
-    -
-      project_id: vz-it-pr-j2lv-cmido-0
-      JOB_NAME: cqes_rules_based_scoring
-      PROCESS_NAME: rules_based_scoring
-      dag_bucket: us-east4-vz-it-pr-wdwg-aidc-5dc37683-bucket
-      mi_artifactory_bucket: vz-it-pr-j2lv-cmido-0-mi-artifactory
-      region: us-east4
-      sa_conn_id: sa-vz-it-j2lv-cmido-0-app
-      cluster_name: vz-it-pr-j2lv-cmido-dp-lr
-      src_script_location: cqes/rule_based_scoring/1.1/
-      main_script: cqes_rules_based_scoring.py
-      config_location: cqes/rule_based_scoring/
-      constants: cqes_rules_based_scoring_constants.py
-      functions: cqes_rules_based_scoring_functions.py
-      queries: cqes_rules_based_scoring_queries.py
-      spark_jar_uri: gs://vz-it-pr-j2lv-cmido-0-mi-artifactory/jar/spark-bigquery-with-dependencies_2.12-0.27.1.jar
-      email_id: gcp-mi@verizon.com
-      application_name : MARKET_INTELLIGENCE
-      project_name : cQES Rule Based Scoring
-      j2lv_service_account : sa-pr-j2lv-app-cmido-0@vz-it-pr-j2lv-cmido-0.iam.gserviceaccount.com
-      subnet : projects/vz-it-pr-exhv-sharedvpc-228020/regions/us-east4/subnetworks/shared-pr-east-green-subnet-2
-      kms_key : projects/vz-it-pr-d0sv-vsadkms-0/locations/us-east4/keyRings/vz-it-pr-kr-aid/cryptoKeys/vz-it-pr-kms-j2lv
-      metastore_service : projects/vz-it-pr-wdwg-aidcom-0/locations/us-east4/services/vz-pr-wdwg-aidcom-dpms
-      priority : P1
-      critical_priority : P1
-      critical_day : Monday
-      job_frequency : daily
-      base_dir : /home/airflow/gcs/dags/vz-it-j2lv-cmido-0
-      src_table : vz-it-pr-j2lv-cmido-0.market_intelligence_crowdsourced_processed.onx_mobile_processed,vz-it-pr-j2lv-cmipr-0.market_intelligence_shapefiles.census_tract2020,vz-it-pr-j2lv-cmipr-0.market_intelligence_shapefiles.census_2020,vz-it-pr-j2lv-cmido-0.cqes.cqes_census_tract_mapping,vz-it-pr-j2lv-cmido-0.cqes.cqes_cma_mapping
-      target_table : vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_ct_dly_summary_v1,vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_ct_dly_v1,vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_ct_dly_wide_v1,vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_cma_dly_v1,vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_cma_dly_wide
-      opsgenie_api_key : c519ffac-8894-4188-9e5a-f1926ca480a2
- below error:
-[2025-02-17, 09:57:42 UTC] {warnings.py:110} WARNING - /opt/python3.11/lib/python3.11/site-packages/airflow/providers/openlineage/plugins/adapter.py:93: DeprecationWarning: `OpenLineageClient.from_environment()` is deprecated. Use `OpenLineageClient()`.
-  self._client = OpenLineageClient.from_environment()
-
-[2025-02-17, 09:57:42 UTC] {client.py:110} INFO - OpenLineageClient will use `http` transport
-[2025-02-17, 09:57:47 UTC] {adapter.py:163} WARNING - Failed to emit OpenLineage event of id 01951357-501d-732c-8592-2068f73e8149
-[2025-02-17, 09:57:47 UTC] {taskinstance.py:1939} ERROR - Task failed with exception
-Traceback (most recent call last):
-  File "/opt/python3.11/lib/python3.11/site-packages/google/api_core/grpc_helpers.py", line 76, in error_remapped_callable
-    return callable_(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/grpc/_channel.py", line 1176, in __call__
-    return _end_unary_response_blocking(state, call, False, None)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/grpc/_channel.py", line 1005, in _end_unary_response_blocking
-    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
-	status = StatusCode.INVALID_ARGUMENT
-	details = "Dataproc Cluster 'projects/vz-it-np-j2lv-dev-cmido-0/regions/us-east4/clusters/vz-it-np-j2lv-cmido-teradata' must have the property 'spark:spark.history.fs.logDirectory' configured to act as a Spark history server"
-	debug_error_string = "UNKNOWN:Error received from peer ipv4:63.22.171.3:443 {grpc_message:"Dataproc Cluster \'projects/vz-it-np-j2lv-dev-cmido-0/regions/us-east4/clusters/vz-it-np-j2lv-cmido-teradata\' must have the property \'spark:spark.history.fs.logDirectory\' configured to act as a Spark history server", grpc_status:3, created_time:"2025-02-17T09:57:42.658112765+00:00"}"
->
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/providers/google/cloud/operators/dataproc.py", line 3005, in execute
-    self.operation = hook.create_batch(
-                     ^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/providers/google/common/hooks/base_google.py", line 486, in inner_wrapper
-    return func(self, *args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/providers/google/cloud/hooks/dataproc.py", line 969, in create_batch
-    result = client.create_batch(
-             ^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/google/cloud/dataproc_v1/services/batch_controller/client.py", line 826, in create_batch
-    response = rpc(
-               ^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/google/api_core/gapic_v1/method.py", line 131, in __call__
-    return wrapped_func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/google/api_core/grpc_helpers.py", line 78, in error_remapped_callable
-    raise exceptions.from_grpc_error(exc) from exc
-google.api_core.exceptions.InvalidArgument: 400 Dataproc Cluster 'projects/vz-it-np-j2lv-dev-cmido-0/regions/us-east4/clusters/vz-it-np-j2lv-cmido-teradata' must have the property 'spark:spark.history.fs.logDirectory' configured to act as a Spark history server
-[2025-02-17, 09:57:47 UTC] {taskinstance.py:1401} INFO - Marking task as FAILED. dag_id=dg_bdc_raw_coverage, task_id=bdc_raw_coverage, execution_date=20250217T095724, start_date=20250217T095736, end_date=20250217T095747
-[2025-02-17, 09:57:47 UTC] {warnings.py:110} WARNING - /opt/python3.11/lib/python3.11/site-packages/airflow/utils/email.py:154: RemovedInAirflow3Warning: Fetching SMTP credentials from configuration variables will be deprecated in a future release. Please set credentials using a connection instead.
-  send_mime_email(e_from=mail_from, e_to=recipients, mime_msg=msg, conn_id=conn_id, dryrun=dryrun)
-
-[2025-02-17, 09:57:47 UTC] {configuration.py:1067} WARNING - section/key [smtp/smtp_user] not found in config
-[2025-02-17, 09:57:47 UTC] {email.py:270} INFO - Email alerting: attempt 1
-[2025-02-17, 09:57:47 UTC] {email.py:281} INFO - Sent an alert email to ['vuyyuri.trilok.narayana.varma@verizon.com']
-[2025-02-17, 09:57:48 UTC] {taskinstance.py:1707} ERROR - Error when executing partial callback
-Traceback (most recent call last):
-  File "/opt/python3.11/lib/python3.11/site-packages/google/api_core/grpc_helpers.py", line 76, in error_remapped_callable
-    return callable_(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/grpc/_channel.py", line 1176, in __call__
-    return _end_unary_response_blocking(state, call, False, None)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/grpc/_channel.py", line 1005, in _end_unary_response_blocking
-    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
-	status = StatusCode.INVALID_ARGUMENT
-	details = "Dataproc Cluster 'projects/vz-it-np-j2lv-dev-cmido-0/regions/us-east4/clusters/vz-it-np-j2lv-cmido-teradata' must have the property 'spark:spark.history.fs.logDirectory' configured to act as a Spark history server"
-	debug_error_string = "UNKNOWN:Error received from peer ipv4:63.22.171.3:443 {grpc_message:"Dataproc Cluster \'projects/vz-it-np-j2lv-dev-cmido-0/regions/us-east4/clusters/vz-it-np-j2lv-cmido-teradata\' must have the property \'spark:spark.history.fs.logDirectory\' configured to act as a Spark history server", grpc_status:3, created_time:"2025-02-17T09:57:42.658112765+00:00"}"
->
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 1519, in _run_raw_task
-    self._execute_task_with_callbacks(context, test_mode, session=session)
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 1683, in _execute_task_with_callbacks
-    result = self._execute_task(context, task_orig)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 1746, in _execute_task
-    result = execute_callable(context=context, **execute_callable_kwargs)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/providers/google/cloud/operators/dataproc.py", line 3005, in execute
-    self.operation = hook.create_batch(
-                     ^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/providers/google/common/hooks/base_google.py", line 486, in inner_wrapper
-    return func(self, *args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/providers/google/cloud/hooks/dataproc.py", line 969, in create_batch
-    result = client.create_batch(
-             ^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/google/cloud/dataproc_v1/services/batch_controller/client.py", line 826, in create_batch
-    response = rpc(
-               ^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/google/api_core/gapic_v1/method.py", line 131, in __call__
-    return wrapped_func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/python3.11/lib/python3.11/site-packages/google/api_core/grpc_helpers.py", line 78, in error_remapped_callable
-    raise exceptions.from_grpc_error(exc) from exc
-google.api_core.exceptions.InvalidArgument: 400 Dataproc Cluster 'projects/vz-it-np-j2lv-dev-cmido-0/regions/us-east4/clusters/vz-it-np-j2lv-cmido-teradata' must have the property 'spark:spark.history.fs.logDirectory' configured to act as a Spark history server
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/opt/python3.11/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 1704, in _run_finished_callback
-    callback(context)
-  File "/home/airflow/gcs/dags/vz-it-j2lv-cmido-0/observability/aid_observability.py", line 14, in observability_step_
-[2025-02-17, 09:57:48 UTC] {} INFO - email
-    OPSGENIE_API_KEY = variables['opsgenie_api_key']
-                       ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
-KeyError: 'opsgenie_api_key'
-[2025-02-17, 09:57:48 UTC] {standard_task_runner.py:104} ERROR - Failed to execute job 13045849 for task bdc_raw_coverage (400 Dataproc Cluster 'projects/vz-it-np-j2lv-dev-cmido-0/regions/us-east4/clusters/vz-it-np-j2lv-cmido-teradata' must have the property 'spark:spark.history.fs.logDirectory' configured to act as a Spark history server; 176531)
-[2025-02-17, 09:57:48 UTC] {local_task_job_runner.py:228} INFO - Task exited with return code 1
-[2025-02-17, 09:57:48 UTC] {taskinstance.py:2781} INFO - 0 downstream tasks scheduled from follow-on schedule check
-
