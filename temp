@@ -1,66 +1,375 @@
-project:
-  vz-it-np-wdwg-dev-aidcom-0:
-    -
-      project_id: vz-it-np-j2lv-dev-cmido-0
-      JOB_NAME: cqes_rules_based_scoring
-      PROCESS_NAME: rules_based_scoring
-      dag_bucket: us-east4-vz-it-dev-wdwg-aid-d64a7958-bucket
-      mi_artifactory_bucket: vz-it-np-j2lv-dev-cmido-0-mi-artifactory
-      region: us-east4
-      sa_conn_id: sa-vz-it-j2lv-cmido-0-app
-      # cluster_name: vz-it-np-j2lv-cmido-teradata  # REMOVE THIS LINE
-      src_script_location: cqes/rule_based_scoring/1.1/
-      main_script: cqes_rules_based_scoring.py
-      config_location: cqes/rule_based_scoring/
-      constants: cqes_rules_based_scoring_constants.py
-      functions: cqes_rules_based_scoring_functions.py
-      queries: cqes_rules_based_scoring_queries.py
-      spark_jar_uri: gs://vz-it-np-j2lv-dev-cmido-0-mi-artifactory/facebook-metadata/jar/spark-bigquery-with-dependencies_2.12-0.27.1.jar
-      email_id : vuyyuri.trilok.narayana.varma@verizon.com
-      application_name : MARKET_INTELLIGENCE
-      j2lv_service_account : sa-dev-j2lv-app-cmido-0@vz-it-np-j2lv-dev-cmido-0.iam.gserviceaccount.com
-      subnet : projects/vz-it-np-exhv-sharedvpc-228116/regions/us-east4/subnetworks/shared-np-east-green-subnet-1
-      kms_key : projects/vz-it-np-d0sv-vsadkms-0/locations/us-east4/keyRings/vz-it-np-kr-aid/cryptoKeys/vz-it-np-kms-j2lv
-      metastore_service : projects/vz-it-np-wdwg-dev-aidcom-0/locations/us-east4/services/vz-dev-wdwg-aidcom-dpms
-      project_name : cQES Rule Based Scoring
-      priority : P3
-      critical_priority : P3
-      critical_day : Monday
-      job_frequency : daily
-      base_dir : /home/airflow/gcs/dags/vz-it-j2lv-cmido-0
-      src_table : vz-it-pr-j2lv-cmido-0.market_intelligence_crowdsourced_processed_rd_v.tutela_raw_data,vz-it-pr-j2lv-cmido-0.market_intelligence_shapefiles_rd_v.census_tract2020,vz-it-pr-j2lv-cmido-0.market_intelligence_shapefiles_rd_v.census_2020,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_census_tract_mapping,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_cma_mapping,vz-it-pr-j2lv-cmido-0.cqes_rd_v.cqes_rootmetrics_results_per_cma,vz-it-pr-j2lv-cmido-0.market_intelligence_summary_rd_v.ookla_coverage_maps_pop_covered
-      target_table : vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_ct_dly_summary,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_ct_dly,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_ct_dly_wide,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_cma_dly,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_cma_dly_wide
-      opsgenie_api_key : c519ffac-8894-4188-9e5a-f1926ca480a2
+Error message from worker: generic::unknown: Traceback (most recent call last):
+  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 917, in apache_beam.runners.common.PerWindowInvoker.invoke_process
+  File "apache_beam/runners/common.py", line 1059, in apache_beam.runners.common.PerWindowInvoker._invoke_process_per_window
+  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
+  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
+  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
+  File "apache_beam/runners/worker/operations.py", line 525, in apache_beam.runners.worker.operations.Operation.process
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/bundle_processor.py", line 158, in process
+    self.windowed_coder_impl.encode_to_stream(
+  File "apache_beam/coders/coder_impl.py", line 1446, in apache_beam.coders.coder_impl.WindowedValueCoderImpl.encode_to_stream
+  File "apache_beam/coders/coder_impl.py", line 1465, in apache_beam.coders.coder_impl.WindowedValueCoderImpl.encode_to_stream
+  File "apache_beam/coders/coder_impl.py", line 1021, in apache_beam.coders.coder_impl.AbstractComponentCoderImpl.encode_to_stream
+ValueError: Number of components does not match number of coders.
 
-  vz-it-pr-wdwg-aidcom-0:
-    -
-      project_id: vz-it-pr-j2lv-cmido-0
-      JOB_NAME: cqes_rules_based_scoring
-      PROCESS_NAME: rules_based_scoring
-      dag_bucket: us-east4-vz-it-pr-wdwg-aidc-5dc37683-bucket
-      mi_artifactory_bucket: vz-it-pr-j2lv-cmido-0-mi-artifactory
-      region: us-east4
-      sa_conn_id: sa-vz-it-j2lv-cmido-0-app
-      # cluster_name: vz-it-pr-j2lv-cmido-dp-lr   # REMOVE THIS LINE
-      src_script_location: cqes/rule_based_scoring/1.1/
-      main_script: cqes_rules_based_scoring.py
-      config_location: cqes/rule_based_scoring/
-      constants: cqes_rules_based_scoring_constants.py
-      functions: cqes_rules_based_scoring_functions.py
-      queries: cqes_rules_based_scoring_queries.py
-      spark_jar_uri: gs://vz-it-pr-j2lv-cmido-0-mi-artifactory/jar/spark-bigquery-with-dependencies_2.12-0.27.1.jar
-      email_id: gcp-mi@verizon.com
-      application_name : MARKET_INTELLIGENCE
-      project_name : cQES Rule Based Scoring
-      j2lv_service_account : sa-pr-j2lv-app-cmido-0@vz-it-pr-j2lv-cmido-0.iam.gserviceaccount.com
-      subnet : projects/vz-it-pr-exhv-sharedvpc-228020/regions/us-east4/subnetworks/shared-pr-east-green-subnet-2
-      kms_key : projects/vz-it-pr-d0sv-vsadkms-0/locations/us-east4/keyRings/vz-it-pr-kr-aid/cryptoKeys/vz-it-pr-kms-j2lv
-      metastore_service : projects/vz-it-pr-wdwg-aidcom-0/locations/us-east4/services/vz-pr-wdwg-aidcom-dpms
-      priority : P1
-      critical_priority : P1
-      critical_day : Monday
-      job_frequency : daily
-      base_dir : /home/airflow/gcs/dags/vz-it-j2lv-cmido-0
-      src_table : vz-it-pr-j2lv-cmido-0.market_intelligence_crowdsourced_processed.onx_mobile_processed,vz-it-pr-j2lv-cmipr-0.market_intelligence_shapefiles.census_tract2020,vz-it-pr-j2lv-cmipr-0.market_intelligence_shapefiles.census_2020,vz-it-pr-j2lv-cmido-0.cqes.cqes_census_tract_mapping,vz-it-pr-j2lv-cmido-0.cqes.cqes_cma_mapping
-      target_table : vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_ct_dly_summary_v1,vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_ct_dly_v1,vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_ct_dly_wide_v1,vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_cma_dly_v1,vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_cma_dly_wide
-      opsgenie_api_key : c519ffac-8894-4188-9e5a-f1926ca480a2
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 311, in _execute
+    response = task()
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 386, in <lambda>
+    lambda: self.create_worker().do_instruction(request), request)
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 656, in do_instruction
+    return getattr(self, request_type)(
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 694, in process_bundle
+    bundle_processor.process_bundle(instruction_id))
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/bundle_processor.py", line 1119, in process_bundle
+    input_op_by_transform_id[element.transform_id].process_encoded(
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/bundle_processor.py", line 237, in process_encoded
+    self.output(decoded_value)
+  File "apache_beam/runners/worker/operations.py", line 567, in apache_beam.runners.worker.operations.Operation.output
+  File "apache_beam/runners/worker/operations.py", line 569, in apache_beam.runners.worker.operations.Operation.output
+  File "apache_beam/runners/worker/operations.py", line 260, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
+  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
+  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 1592, in apache_beam.runners.common.DoFnRunner._reraise_augmented
+  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
+  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
+  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
+  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
+  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 1592, in apache_beam.runners.common.DoFnRunner._reraise_augmented
+  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
+  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
+  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
+  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
+  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 1592, in apache_beam.runners.common.DoFnRunner._reraise_augmented
+  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
+  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
+  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
+  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
+  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 1592, in apache_beam.runners.common.DoFnRunner._reraise_augmented
+  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
+  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
+  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
+  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
+  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 1613, in apache_beam.runners.common.DoFnRunner._reraise_augmented
+  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 917, in apache_beam.runners.common.PerWindowInvoker.invoke_process
+  File "apache_beam/runners/common.py", line 1059, in apache_beam.runners.common.PerWindowInvoker._invoke_process_per_window
+  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
+  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
+  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
+  File "apache_beam/runners/worker/operations.py", line 525, in apache_beam.runners.worker.operations.Operation.process
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/bundle_processor.py", line 158, in process
+    self.windowed_coder_impl.encode_to_stream(
+  File "apache_beam/coders/coder_impl.py", line 1446, in apache_beam.coders.coder_impl.WindowedValueCoderImpl.encode_to_stream
+  File "apache_beam/coders/coder_impl.py", line 1465, in apache_beam.coders.coder_impl.WindowedValueCoderImpl.encode_to_stream
+  File "apache_beam/coders/coder_impl.py", line 1021, in apache_beam.coders.coder_impl.AbstractComponentCoderImpl.encode_to_stream
+ValueError: Number of components does not match number of coders. [while running 'Window-ptransform-43']
+
+passed through:
+==>
+    dist_proc/dax/workflow/worker/fnapi_service_impl.cc:1316
+
+
+
+import apache_beam as beam 
+from apache_beam.options.pipeline_options import PipelineOptions
+from apache_beam.io.gcp.pubsub import ReadFromPubSub
+import apache_beam.io.gcp.spanner as sp
+import json
+import argparse
+import logging
+from typing import NamedTuple, Iterator, Optional
+from datetime import datetime
+from apache_beam.transforms.window import FixedWindows
+from apache_beam.transforms.trigger import AfterWatermark, AccumulationMode
+
+class TemplateOptions(PipelineOptions):
+    @classmethod
+    def _add_argparse_args(cls, parser):
+        parser.add_value_provider_argument('--params', type=str)
+
+class InventoryCustomerProfilesMutation(NamedTuple):
+    provisioning_date: Optional[str]
+    data_circuit_id: Optional[str] 
+    circuit_id: Optional[str]
+    video_circuit_id: Optional[str]
+    service_type: Optional[str]
+    address_id: Optional[int]
+    vision_account_id: Optional[str]
+    vision_customer_id: Optional[str]
+    address_type: Optional[str]
+    line_of_business: Optional[str]
+
+beam.coders.registry.register_coder(InventoryCustomerProfilesMutation, beam.coders.RowCoder)
+
+class DecodeAvroRecords(beam.DoFn):
+    def process(self, element) -> Iterator[dict]:
+        import avro.io as avro_io
+        import avro.schema
+        from io import BytesIO
+        import time
+
+        def reformat_input_msg_schema(msg):
+            fmt_msg = {}
+            fmt_msg['timestamp'] = msg['timestamp']
+            fmt_msg['host'] = msg['host']
+            fmt_msg['src'] = msg['src']
+            fmt_msg['ingressTimestamp'] = msg['_event_ingress_ts']
+            fmt_msg['origins'] = [msg['_event_origin']]
+            tags_len = len(msg['_event_tags'])
+            if tags_len > 0:
+                if msg['_event_tags'][0] != "" and msg['_event_tags'][0] is not None:
+                    fmt_msg['tags'] = msg['_event_tags']
+                else:
+                    fmt_msg['tags'] = ['Dummy']
+            else:
+                fmt_msg['tags'] = ['Dummy']
+            fmt_msg['route'] = 3
+            fmt_msg['fetchTimestamp'] = int(time.time() * 1000)
+            fmt_msg['rawdata'] = msg['rawdata']
+            
+            return json.loads(fmt_msg['rawdata'])
+
+        message: dict = {}
+        raw_schema = """{"namespace": "com.vz.vznet",
+                        "type": "record",
+                        "name": "VznetDefault",
+                        "doc": "Default schema for events in transit",
+                        "fields": [
+                        {"name": "timestamp", "type": "long"},
+                        {"name": "host", "type": "string"},
+                        {"name": "src",  "type": "string" },
+                        {"name": "_event_ingress_ts", "type": "long"},
+                        {"name": "_event_origin", "type": "string"},
+                        {"name": "_event_tags", "type": {"type": "array", "items": "string"}},
+                        {"name": "_event_route", "type": "string"},
+                        {"name": "_event_metrics", "type": ["null", "bytes"], "default": null},
+                        {"name": "rawdata", "type": "bytes"}
+                        ]}"""
+        try:
+            schema = avro.schema.parse(raw_schema)
+            avro_reader = avro_io.DatumReader(schema)
+            avro_message = avro_io.BinaryDecoder(BytesIO(element))
+            message = avro_reader.read(avro_message)
+            
+            if schema.name == 'VznetDefault':
+                message['rawdata'] = message['rawdata'].decode("utf-8")
+                message['_event_metrics'] = message['_event_metrics'].decode("utf-8") if message['_event_metrics'] is not None else None
+                
+            reformatted = reformat_input_msg_schema(message)
+            yield reformatted
+            
+        except Exception as e:
+            logging.error(f"Error processing message: {str(e)}")
+            return
+
+class PrepareSpannerData(beam.DoFn):
+    def process(self, element) -> Iterator[InventoryCustomerProfilesMutation]:
+        try:
+            yield self.transform_to_mutation(element)
+        except Exception as e:
+            logging.error(f"Error processing element: {element}")
+            logging.error(f"Error details: {str(e)}")
+            return
+
+    def format_timestamp(self,value):
+        try:
+            raw_value = float(value)
+            if raw_value <= 0:
+                raw_value = 0
+            elif raw_value > 2240611199 * 1000:
+                raw_value = 2240611199 * 1000 # date=2040-12-31
+
+            casted_t_value = datetime.fromtimestamp(raw_value / 1000)
+            return casted_t_value.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        except Exception as e:
+            logging.error(f"CUSTOM_ERROR_LOG: Timestamp formatting error: {str(e)}; /n value={value}")
+            return None
+        
+    def format_date(self, value):
+        """Convert date/datetime to string format."""
+        if value is None:
+            return None
+        try:
+            if isinstance(value, str):
+                # Remove microseconds if present
+                dt = datetime.strptime(value.split('.')[0], '%Y-%m-%d %H:%M:%S')
+                return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+            return value
+        except Exception as e:
+            logging.error(f"CUSTOM_ERROR_LOG: Date formatting error: {str(e)}")
+            return None
+
+    def safe_int(self, value):
+        """Safely convert value to int."""
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return None
+
+    def transform_to_mutation(self, element):
+        return InventoryCustomerProfilesMutation(
+            provisioning_date=self.format_timestamp(element.get('ont_activation_date')),
+            data_circuit_id=element.get('data_circuit_id'),
+            circuit_id=element.get('circuit_id'),
+            video_circuit_id=element.get('video_circuit_id'),
+            service_type=element.get('service_type'),
+            address_id=self.safe_int(element.get('address_id')),
+            vision_account_id=element.get('vision_account_id'),
+            vision_customer_id=element.get('vision_customer_id'),
+            address_type=element.get('address_type'),
+            line_of_business=element.get('line_of_business')
+        )
+
+class BatchElements(beam.DoFn):
+    def process(self, elements):
+        yield elements
+
+def run(known_args, beam_args):
+    options = {
+        'project': known_args.project,
+        'runner': known_args.runner,
+        'region': known_args.region,
+        'staging_location': known_args.staging_location,
+        'temp_location': known_args.temp_location,
+        'template_location': known_args.template_location,
+        'save_main_session': True,
+        'streaming': True,
+        'sdk_container_image': known_args.sdk_container_image,
+        'sdk_location': 'container'
+    }
+
+    pipeline_options = PipelineOptions.from_dictionary(options)
+    
+    with beam.Pipeline(options=pipeline_options) as p:
+        # Read and decode data
+        data = (p 
+            | "Read From Pubsub" >> ReadFromPubSub(
+                subscription=f"{known_args.pubsub_subscription_name}")
+            | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
+        )
+
+        # Process and batch data
+        mutations = (data
+            | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
+            # Add timestamp to enable windowing
+            | 'Add Timestamps' >> beam.Map(lambda x: beam.window.TimestampedValue(x, beam.utils.timestamp.Timestamp.now()))
+            | 'Window' >> beam.WindowInto(
+                FixedWindows(120),  # 2 minutes in seconds
+                trigger=AfterWatermark(),
+                accumulation_mode=AccumulationMode.DISCARDING
+            )
+            | 'Global Window' >> beam.GroupByKey()
+            | 'Flatten Groups' >> beam.FlatMap(lambda x: x[1])
+        )
+
+        # Write to Spanner
+        _ = (mutations
+            | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
+                instance_id=known_args.spanner_instance,
+                database_id=known_args.spanner_dataset,
+                project_id=known_args.spanner_project,
+                table=known_args.spanner_table,
+                expansion_service=known_args.expansion_service,
+                commit_deadline=30,
+                max_number_mutations=7000,
+                high_priority=True
+            )
+        )
+
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--project', required=True, help='GCP Project ID')
+    parser.add_argument('--runner', default="DataflowRunner", help='Pipeline runner')
+    parser.add_argument('--region', default="us-east4", help='GCP project region')
+    parser.add_argument('--staging_location', required=True, help='Staging GCS bucket path')
+    parser.add_argument('--temp_location', required=True, help='Temp GCS bucket path')
+    parser.add_argument('--template_location', required=True, help='GCS bucket path to save template')
+    parser.add_argument('--pubsub_subscription_name', required=True, help='Input Subscription')
+    parser.add_argument('--sdk_container_image', default='us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/wireline:1.0.0', help='sdk_container_image location')
+    parser.add_argument('--spanner_dataset', required=True, help='spanner dataset')
+    parser.add_argument('--spanner_instance', required=True, help='spanner instance')
+    parser.add_argument('--spanner_project', required=True, help='spanner project')
+    parser.add_argument('--spanner_table', required=True, help='spanner table')
+    parser.add_argument('--expansion_service', default='localhost:50768', help='Expansion service host:port')
+    return parser.parse_known_args()
+
+if __name__ == '__main__':
+    logging.getLogger().setLevel(logging.INFO)
+    known_args, beam_args = parse_arguments()
+    run(known_args, beam_args)
+    print(f'Created template at {known_args.template_location}.')
+
+while True:
+    pipTopologySrc = {
+        "input": [
+            {"src": "vz.pip.eclipse.stat.if_stats.proc.v0", 
+             "timestamp": 1563152004139, 
+             "host": "TEST-1234-XYZ",
+             "ingressTimestamp": 1563153004139, 
+             "fetchTimestamp": 1563153008139, 
+             "origins": ["vmb,kafka,ENMV.PIP.IP"],
+             "tags": [], "route": 3,
+                "rawdata": {
+                 "ont_activation_date": "2019-08-28 04:00:00.000000 UTC",
+                 "data_circuit_id" : "A6o6LHciNWfMMDXRAk/AmzSqPzZU3lHpzvpeWb0487+2CKWc6iSMbMf+z7sLju0UiEj/jLnGDmcLlU5t5llkug==",
+                 "circuit_id" : f'{generate_random_string(20)}',
+                 "video_circuit_id" :  f'{generate_random_string(20)}',
+                 "service_type" : "BWLHiXyrs2l8/F7ldbmoRsIY7WQhFyX3euXshykBAALkRUlgQLvnnltzAp/ymwFAjc0Auk7LVFC4InQT+g5/1Q==",
+                 "address_id" : 17935568585.0,
+                 "vision_account_id" : "ZcXG3TS/LG7ymRvKTaf4C7lUgLMO3MVHIhhQ74DRZ9Y6opYN1hADfRhn4SA+eXs5kbweoYtXXeAVLyo8XD1ioQ==",
+                 "vision_customer_id" : "Tz1bRQ1Md58vddT9EfHmU3LvXtmlDB4CDpLWNFRmI7wg4gFO9lSIEbNXNQAJiVqZIU2/dcdEjaZLlGHhFD4H0g==",
+                 "address_type11" : "SFU",
+                 "line_of_business" : "Residence"
+             }
+            },
+            {"src": "vz.pip.eclipse.stat.if_stats.proc.v0", 
+             "timestamp": 1563152004139, 
+             "host": "TEST-1234-XYZ",
+             "ingressTimestamp": 1563153004139, 
+             "fetchTimestamp": 1563153008139, 
+             "origins": ["vmb,kafka,ENMV.PIP.IP"],
+             "tags": [], 
+             "route": 3,
+            "rawdata": {
+                 "ont_activation_date": "2019-08-28 04:00:00.000000 UTC",
+                 "data_circuit_id" : "A6o6LHciNWfMMDXRAk/AmzSqPzZU3lHpzvpeWb0487+2CKWc6iSMbMf+z7sLju0UiEj/jLnGDmcLlU5t5llkug==",
+                 "circuit_id" : f'{generate_random_string(20)}',
+                 "video_circuit_id" : f'{generate_random_string(20)}',
+                 "service_type11" : "BWLHiXyrs2l8/F7ldbmoRsIY7WQhFyX3euXshykBAALkRUlgQLvnnltzAp/ymwFAjc0Auk7LVFC4InQT+g5/1Q==",
+                 "address_id" : 17935568585.0,
+                 "vision_account_id" : "ZcXG3TS/LG7ymRvKTaf4C7lUgLMO3MVHIhhQ74DRZ9Y6opYN1hADfRhn4SA+eXs5kbweoYtXXeAVLyo8XD1ioQ==",
+                 "vision_customer_id" : "Tz1bRQ1Md58vddT9EfHmU3LvXtmlDB4CDpLWNFRmI7wg4gFO9lSIEbNXNQAJiVqZIU2/dcdEjaZLlGHhFD4H0g==",
+                 "address_type" : "SFU",
+                 "line_of_business" : "Residence"
+             }
+            }
+            ]
+        }
+    for i in pipTopologySrc['input']:
+        e = EncodeAvro(i)
+        pushToTopic(e, "wireline_churn_test_topic")
+        time.sleep(5)
