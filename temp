@@ -1,3 +1,70 @@
+project:
+  vz-it-np-wdwg-dev-aidcom-0:
+    -
+      project_id: vz-it-np-j2lv-dev-cmido-0
+      JOB_NAME: cqes_rules_based_scoring
+      PROCESS_NAME: rules_based_scoring
+      dag_bucket: us-east4-vz-it-dev-wdwg-aid-d64a7958-bucket
+      mi_artifactory_bucket: vz-it-np-j2lv-dev-cmido-0-mi-artifactory
+      region: us-east4
+      sa_conn_id: sa-vz-it-j2lv-cmido-0-app
+      cluster_name: vz-it-np-j2lv-cmido-teradata
+      src_script_location: cqes/rule_based_scoring/1.1/
+      main_script: cqes_rules_based_scoring.py
+      config_location: cqes/rule_based_scoring/
+      constants: cqes_rules_based_scoring_constants.py
+      functions: cqes_rules_based_scoring_functions.py
+      queries: cqes_rules_based_scoring_queries.py
+      spark_jar_uri: gs://vz-it-np-j2lv-dev-cmido-0-mi-artifactory/facebook-metadata/jar/spark-bigquery-with-dependencies_2.12-0.27.1.jar
+      email_id : vuyyuri.trilok.narayana.varma@verizon.com
+      application_name : MARKET_INTELLIGENCE
+      j2lv_service_account : sa-dev-j2lv-app-cmido-0@vz-it-np-j2lv-dev-cmido-0.iam.gserviceaccount.com
+      subnet : projects/vz-it-np-exhv-sharedvpc-228116/regions/us-east4/subnetworks/shared-np-east-green-subnet-1
+      kms_key : projects/vz-it-np-d0sv-vsadkms-0/locations/us-east4/keyRings/vz-it-np-kr-aid/cryptoKeys/vz-it-np-kms-j2lv
+      metastore_service : projects/vz-it-np-wdwg-dev-aidcom-0/locations/us-east4/services/vz-dev-wdwg-aidcom-dpms
+      project_name : cQES Rule Based Scoring
+      priority : P3
+      critical_priority : P3
+      critical_day : Monday
+      job_frequency : daily
+      base_dir : /home/airflow/gcs/dags/vz-it-j2lv-cmido-0
+      src_table : vz-it-pr-j2lv-cmido-0.market_intelligence_crowdsourced_processed_rd_v.tutela_raw_data,vz-it-pr-j2lv-cmido-0.market_intelligence_shapefiles_rd_v.census_tract2020,vz-it-pr-j2lv-cmido-0.market_intelligence_shapefiles_rd_v.census_2020,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_census_tract_mapping,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_cma_mapping,vz-it-pr-j2lv-cmido-0.cqes_rd_v.cqes_rootmetrics_results_per_cma,vz-it-pr-j2lv-cmido-0.market_intelligence_summary_rd_v.ookla_coverage_maps_pop_covered
+      target_table : vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_ct_dly_summary,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_ct_dly,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_ct_dly_wide,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_cma_dly,vz-it-np-j2lv-dev-cmido-0.cqes.cqes_rb_cma_dly_wide
+      opsgenie_api_key : c519ffac-8894-4188-9e5a-f1926ca480a2
+
+  vz-it-pr-wdwg-aidcom-0:
+    -
+      project_id: vz-it-pr-j2lv-cmido-0
+      JOB_NAME: cqes_rules_based_scoring
+      PROCESS_NAME: rules_based_scoring
+      dag_bucket: us-east4-vz-it-pr-wdwg-aidc-5dc37683-bucket
+      mi_artifactory_bucket: vz-it-pr-j2lv-cmido-0-mi-artifactory
+      region: us-east4
+      sa_conn_id: sa-vz-it-j2lv-cmido-0-app
+      cluster_name: vz-it-pr-j2lv-cmido-dp-lr
+      src_script_location: cqes/rule_based_scoring/1.1/
+      main_script: cqes_rules_based_scoring.py
+      config_location: cqes/rule_based_scoring/
+      constants: cqes_rules_based_scoring_constants.py
+      functions: cqes_rules_based_scoring_functions.py
+      queries: cqes_rules_based_scoring_queries.py
+      spark_jar_uri: gs://vz-it-pr-j2lv-cmido-0-mi-artifactory/jar/spark-bigquery-with-dependencies_2.12-0.27.1.jar
+      email_id: gcp-mi@verizon.com
+      application_name : MARKET_INTELLIGENCE
+      project_name : cQES Rule Based Scoring
+      j2lv_service_account : sa-pr-j2lv-app-cmido-0@vz-it-pr-j2lv-cmido-0.iam.gserviceaccount.com
+      subnet : projects/vz-it-pr-exhv-sharedvpc-228020/regions/us-east4/subnetworks/shared-pr-east-green-subnet-2
+      kms_key : projects/vz-it-pr-d0sv-vsadkms-0/locations/us-east4/keyRings/vz-it-pr-kr-aid/cryptoKeys/vz-it-pr-kms-j2lv
+      metastore_service : projects/vz-it-pr-wdwg-aidcom-0/locations/us-east4/services/vz-pr-wdwg-aidcom-dpms
+      priority : P1
+      critical_priority : P1
+      critical_day : Monday
+      job_frequency : daily
+      base_dir : /home/airflow/gcs/dags/vz-it-j2lv-cmido-0
+      src_table : vz-it-pr-j2lv-cmido-0.market_intelligence_crowdsourced_processed.onx_mobile_processed,vz-it-pr-j2lv-cmipr-0.market_intelligence_shapefiles.census_tract2020,vz-it-pr-j2lv-cmipr-0.market_intelligence_shapefiles.census_2020,vz-it-pr-j2lv-cmido-0.cqes.cqes_census_tract_mapping,vz-it-pr-j2lv-cmido-0.cqes.cqes_cma_mapping
+      target_table : vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_ct_dly_summary_v1,vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_ct_dly_v1,vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_ct_dly_wide_v1,vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_cma_dly_v1,vz-it-pr-j2lv-cmido-0.cqes.cqes_rb_cma_dly_wide
+      opsgenie_api_key : c519ffac-8894-4188-9e5a-f1926ca480a2
+This is my Yaml file to load the details into below DAG code:
 import logging
 import os
 import sys
@@ -201,7 +268,7 @@ with models.DAG(
 
     task_start >> submit_job >> task_end
 
-THIS IS the error 
+this code is causing below error at submit_job stage like below: 
 
 [2025-02-17, 11:15:02 UTC] {client.py:110} INFO - OpenLineageClient will use `http` transport
 [2025-02-17, 11:15:07 UTC] {adapter.py:163} WARNING - Failed to emit OpenLineage event of id 0195139d-fa47-7902-b732-ed4fc26a4c0d
