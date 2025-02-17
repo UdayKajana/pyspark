@@ -1,3 +1,201 @@
+import logging
+import os
+import sys
+from datetime import datetime, timedelta
+
+import google.cloud.logging
+import pendulum
+import yaml
+from airflow import models
+from airflow.operators.email import EmailOperator
+from airflow.operators.empty import EmptyOperator
+from airflow.operators.python import PythonOperator
+from airflow.providers.google.cloud.operators.dataproc import DataprocCreateBatchOperator
+from functools import partial
+
+BASE_DIR = '/home/airflow/gcs/dags/vz-it-j2lv-cmido-0'
+sys.path.append(f"{BASE_DIR}/dags/common")
+task_logger = logging.getLogger('airflow.task')
+client = google.cloud.logging.Client()
+logger = client.logger(name="cqes_rule_based_daily")
+
+project = os.environ['GCP_PROJECT']
+
+# observability
+MI_ABSOLUTE_PATH = r'/home/airflow/gcs/dags/vz-it-j2lv-cmido-0/observability'
+sys.path.append(f"{MI_ABSOLUTE_PATH}")
+
+from aid_observability import observability_step_email
+
+# Read the YML file and pass the respective parameters based on the GCP project
+with open(f"{BASE_DIR}/config/bdc_coverage.yaml", 'r') as file:
+    data = yaml.full_load(file)
+
+# Initialize variables dictionary with all required keys
+variables = {
+    'steps': {
+        3: {
+            'src_table': None,
+            'target_table': None
+        }
+    },
+    'opsgenie_api_key': None,  # Initialize opsgenie_api_key
+    'base_dir': BASE_DIR  # Added base_dir for observability_step_email
+}
+
+# Process YAML configuration
+for key, value in data.items():
+    for key1, value1 in value.items():
+        if key1 == project:
+            dict = value1
+            for i in dict:
+                project_id = i['project_id']
+                JOB_NAME = i['JOB_NAME']
+                PROCESS_NAME = i['PROCESS_NAME']
+                dag_bucket = i['dag_bucket']
+                mi_artifactory_bucket = i['mi_artifactory_bucket']
+                region = i['region']
+                sa_conn_id = i['sa_conn_id']
+                subnet = i['subnet']
+                src_script_location = i['src_script_location']
+                main_script = i['main_script']
+                config_location = i['config_location']
+                constants = i['constants']
+                functions = i['functions']
+                queries = i['queries']
+                spark_jar_uri = i['spark_jar_uri']
+                dag_email_recipient = i['email_id']
+                application_name = i['application_name']
+                j2lv_service_account = i['j2lv_service_account']
+                kms_key = i['kms_key']
+                metastore_service = i['metastore_service']
+                priority = i['priority']
+                critical_priority = i['critical_priority']
+                critical_day = i['critical_day']
+                project_name = i['project_name']
+                job_frequency = i['job_frequency']
+                
+                # Update variables dictionary
+                variables['steps'][3]['src_table'] = i['src_table']
+                variables['steps'][3]['target_table'] = i['target_table']
+                variables['opsgenie_api_key'] = i['opsgenie_api_key']
+            break
+
+def failure_alert(**kwargs):
+    email = EmailOperator(
+        task_id="send_failed_task",
+        to=dag_email_recipient,
+        subject="BDC Dag Failed",
+        html_content=" Task" + " Failed",
+        dag=dag
+    )
+    email.execute(context=kwargs)
+
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    "start_date": datetime(2025, 1, 24),
+    'email': dag_email_recipient,
+    'email_on_success': True,
+    'email_on_failure': True,
+    'email_on_retry': False,
+    'retries': 0,
+    "project_id": project_id,
+    "region": region,
+    'retry_delay': timedelta(minutes=10),
+    'on_failure_callback': failure_alert
+}
+
+# Define history server log directory
+HISTORY_SERVER_LOG_DIR = f"gs://{dag_bucket}/spark-history-logs"
+
+# Updated Serverless Batch Configuration
+BATCH_CONFIG = {
+    "pyspark_batch": {
+        "main_python_file_uri": f"gs://{dag_bucket}/dags/vz-it-j2lv-cmido-0/bdc_coverage/dataproc_job.py",
+        "args": [
+            "--frequency", "{{ params.frequency }}",
+            "--backfill", "{{ params.backfill }}",
+            "--backfill_start_dt", "{{ params.backfill_start_dt }}",
+            "--backfill_end_dt", "{{ params.backfill_end_dt }}"
+        ],
+        "jar_file_uris": [spark_jar_uri] if spark_jar_uri else [],
+    },
+    "environment_config": {
+        "execution_config": {
+            "service_account": j2lv_service_account,
+            "subnetwork_uri": subnet,
+            "kms_key": kms_key
+        },
+        "peripherals_config": {
+            "metastore_service": metastore_service
+        }
+    },
+    "runtime_config": {
+        "version": "2.1",
+        "properties": {
+            "spark.driver.cores": "4",
+            "spark.executor.cores": "4",
+            "spark.executor.memory": "6g",
+            "spark.driver.memory": "6g",
+            "spark.dynamicAllocation.enabled": "true",
+            "spark.dynamicAllocation.executorAllocationRatio": "0.6",
+            "spark.executor.instances": "2",
+            "spark.dynamicAllocation.minExecutors": "2",
+            "spark.dynamicAllocation.maxExecutors": "32",
+            "spark.hadoop.fs.gs.implicit.dir.repair.enable": "false",
+            "spark.hadoop.google.cloud.auth.service.account.enable": "true",
+            "spark.hadoop.fs.gs.project.id": project_id,
+            "spark.hadoop.google.cloud.auth.service.account.json.keyfile": j2lv_service_account,
+
+        }
+    }
+}
+
+# Remove spark history properties
+if "spark_history_server_config" in BATCH_CONFIG["environment_config"]["peripherals_config"]:
+    del BATCH_CONFIG["environment_config"]["peripherals_config"]["spark_history_server_config"]
+
+with models.DAG(
+        "dg_bdc_raw_coverage",
+        tags=["bdc", "coverage", "bdc_coverage"],
+        default_args=default_args,
+        catchup=False,
+        schedule_interval=None,
+        params={
+            "frequency": "daily",
+            "backfill": "False",
+            "backfill_start_dt": "2023-12-01",
+            "backfill_end_dt": "2023-12-31",
+            "run_date": "dummy_date"
+        }
+) as dag:
+    
+    task_start = EmptyOperator(
+        task_id='start',
+        dag=dag
+    )
+
+    submit_job = DataprocCreateBatchOperator(
+        task_id="bdc_raw_coverage",
+        project_id=project_id,
+        region=region,
+        batch=BATCH_CONFIG,
+        batch_id=f"bdc-coverage-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+        gcp_conn_id=sa_conn_id,
+        on_failure_callback=partial(observability_step_email, variables, step=3),
+        on_success_callback=partial(observability_step_email, variables, step=3)
+    )
+
+    task_end = EmptyOperator(
+        task_id='end',
+        dag=dag,
+        on_failure_callback=partial(observability_step_email, variables, step=5),
+        on_success_callback=partial(observability_step_email, variables, step=5)
+    )
+
+    task_start >> submit_job >> task_end
+
 Using the default container image
 Waiting for container log creation
 PYSPARK_PYTHON=/opt/dataproc/conda/bin/python
