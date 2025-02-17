@@ -80,8 +80,8 @@ def failure_alert(**kwargs):
     email = EmailOperator(
         task_id="send_failed_task",
         to=dag_email_recipient,
-        subject=dag_name + " Dag Failed",
-        html_content=dag_name + " Task" + " Failed",
+        subject="BDC Dag Failed",
+        html_content=" Task" + " Failed",
         dag=dag
     )
     email.execute(context=kwargs)
