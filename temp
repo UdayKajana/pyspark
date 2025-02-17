@@ -7,6 +7,8 @@ import argparse
 import logging
 from typing import NamedTuple, Iterator, Optional
 from datetime import datetime
+from apache_beam.transforms.window import FixedWindows, TimestampCombiner
+from apache_beam.transforms.trigger import AfterWatermark, AccumulationMode
 
 class TemplateOptions(PipelineOptions):
     @classmethod
@@ -110,6 +112,7 @@ class PrepareSpannerData(beam.DoFn):
         except Exception as e:
             logging.error(f"CUSTOM_ERROR_LOG: Timestamp formatting error: {str(e)}; /n value={value}")
             return None
+
     def format_date(self, value):
         """Convert date/datetime to string format."""
         if value is None:
@@ -147,6 +150,12 @@ class PrepareSpannerData(beam.DoFn):
             line_of_business=element.get('line_of_business')
         )
 
+class BatchElements(beam.DoFn):
+    def process(self, elements):
+        # elements will be a list of InventoryCustomerProfilesMutation objects
+        # from the same window
+        yield elements
+
 def run(known_args, beam_args):
     options = {
         'project': known_args.project,
@@ -164,13 +173,32 @@ def run(known_args, beam_args):
     pipeline_options = PipelineOptions.from_dictionary(options)
     
     with beam.Pipeline(options=pipeline_options) as p:
+        # Read and decode data
         data = (p 
             | "Read From Pubsub" >> ReadFromPubSub(
                 subscription=f"{known_args.pubsub_subscription_name}")
             | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
         )
-        _ = (data
+
+        # Process and batch data
+        mutations = (data
             | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
+            # Add timestamp to enable windowing
+            | 'Add Timestamps' >> beam.Map(lambda x: beam.window.TimestampedValue(x, beam.utils.timestamp.Timestamp.now()))
+            # Window into 2-minute fixed windows
+            | 'Window' >> beam.WindowInto(
+                FixedWindows(120),  # 2 minutes in seconds
+                trigger=AfterWatermark(),
+                accumulation_mode=AccumulationMode.DISCARDING,
+                timestamp_combiner=TimestampCombiner.END_OF_WINDOW
+            )
+            # Group all elements in the window together
+            | 'Global Window' >> beam.GroupByKey().without_defaults()
+            | 'Flatten Groups' >> beam.FlatMap(lambda x: x[1])
+        )
+
+        # Write to Spanner
+        _ = (mutations
             | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
                 instance_id=known_args.spanner_instance,
                 database_id=known_args.spanner_dataset,
@@ -180,7 +208,6 @@ def run(known_args, beam_args):
                 commit_deadline=30,
                 max_number_mutations=7000,
                 high_priority=True
-                
             )
         )
 
