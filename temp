@@ -1,82 +1,3 @@
-Using the default container image
-Waiting for container log creation
-PYSPARK_PYTHON=/opt/dataproc/conda/bin/python
-Generating /home/spark/.pip/pip.conf
-Configuring index-url as 'https://us-python.pkg.dev/artifact-registry-python-cache/virtual-python/simple/'
-JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
-SPARK_EXTRA_CLASSPATH=
-:: loading settings :: file = /etc/spark/conf/ivysettings.xml
-File Not found!
-Downloaded storage object dags/vz-it-j2lv-cmido-0/bdc_coverage/raw_data.json from bucket us-east4-vz-it-dev-wdwg-aid-d64a7958-bucket to local file /tmp/bdc/raw_data.json.
-https://broadbandmap.fcc.gov/nbm/map/api/getNBMDataDownloadFile/892462/2
-bdc_41_131425_5GNR_7_1_mobile_broadband_J24_07jan2025.zip
-Traceback (most recent call last):
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/urllib3/connection.py", line 203, in _new_conn
-    sock = connection.create_connection(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/urllib3/util/connection.py", line 85, in create_connection
-    raise err
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/urllib3/util/connection.py", line 73, in create_connection
-    sock.connect(sa)
-OSError: [Errno 101] Network is unreachable
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/urllib3/connectionpool.py", line 790, in urlopen
-    response = self._make_request(
-               ^^^^^^^^^^^^^^^^^^^
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/urllib3/connectionpool.py", line 491, in _make_request
-    raise new_e
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/urllib3/connectionpool.py", line 467, in _make_request
-    self._validate_conn(conn)
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/urllib3/connectionpool.py", line 1096, in _validate_conn
-    conn.connect()
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/urllib3/connection.py", line 611, in connect
-    self.sock = sock = self._new_conn()
-                       ^^^^^^^^^^^^^^^^
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/urllib3/connection.py", line 218, in _new_conn
-    raise NewConnectionError(
-urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPSConnection object at 0x7f679bc5c9b0>: Failed to establish a new connection: [Errno 101] Network is unreachable
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/requests/adapters.py", line 486, in send
-    resp = conn.urlopen(
-           ^^^^^^^^^^^^^
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/urllib3/connectionpool.py", line 844, in urlopen
-    retries = retries.increment(
-              ^^^^^^^^^^^^^^^^^^
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/urllib3/util/retry.py", line 515, in increment
-    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='broadbandmap.fcc.gov', port=443): Max retries exceeded with url: /nbm/map/api/getNBMDataDownloadFile/892462/2 (Caused by NewConnectionError('<urllib3.connection.HTTPSConnection object at 0x7f679bc5c9b0>: Failed to establish a new connection: [Errno 101] Network is unreachable'))
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/var/dataproc/tmp/srvls-batch-1e06937b-d46d-406c-b2e7-305f5a845543/dataproc_job.py", line 128, in <module>
-    downloadZipFiles(raw_coverage_metadata_file, zipfiles_directory, headers)
-  File "/var/dataproc/tmp/srvls-batch-1e06937b-d46d-406c-b2e7-305f5a845543/dataproc_job.py", line 33, in downloadZipFiles
-    response = requests.get(url, headers=headers)
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/requests/api.py", line 73, in get
-    return request("get", url, params=params, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/requests/api.py", line 59, in request
-    return session.request(method=method, url=url, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/requests/sessions.py", line 589, in request
-    resp = self.send(prep, **send_kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/requests/sessions.py", line 703, in send
-    r = adapter.send(request, **kwargs)
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/opt/dataproc/conda/lib/python3.12/site-packages/requests/adapters.py", line 519, in send
-    raise ConnectionError(e, request=request)
-requests.exceptions.ConnectionError: HTTPSConnectionPool(host='broadbandmap.fcc.gov', port=443): Max retries exceeded with url: /nbm/map/api/getNBMDataDownloadFile/892462/2 (Caused by NewConnectionError('<urllib3.connection.HTTPSConnection object at 0x7f679bc5c9b0>: Failed to establish a new connection: [Errno 101] Network is unreachable'))
- this is the error I am getting with below DAG code and dataproc job code, please fix:
 import logging
 import os
 import sys
@@ -89,7 +10,7 @@ from airflow import models
 from airflow.operators.email import EmailOperator
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
-from airflow.providers.google.cloud.operators.dataproc import DataprocCreateBatchOperator
+from airflow.providers.google.cloud.operators.dataproc import DataprocSubmitJobOperator
 from functools import partial
 
 BASE_DIR = '/home/airflow/gcs/dags/vz-it-j2lv-cmido-0'
@@ -153,25 +74,7 @@ variables = {'steps': {
          'src_table': src_table,
          'target_table': target_table
      }
- }
- }
-
-script_path = "gs://us-east4-vz-it-dev-wdwg-aid-d64a7958-bucket/dags/vz-it-j2lv-cmido-0/bdc_coverage/"
-constants_path = f"gs://{mi_artifactory_bucket}/{src_script_location}{constants}"
-functions_path = f"gs://{mi_artifactory_bucket}/{src_script_location}{functions}"
-queries_path = f"gs://{mi_artifactory_bucket}/{src_script_location}{queries}"
-
-tz = pendulum.tz.timezone("UTC")
-env = os.environ.get('ENVIRONMENT', 'dev')
-present = datetime.now().strftime("%Y-%m-%d")
-
-dag_name = "dg_bdc_raw_coverage"
-schedule_interval = None 
-
-# receiving last_task
-last_task = ['email_notify']
-print("last_task is ", last_task)
-
+}}
 
 def failure_alert(**kwargs):
     email = EmailOperator(
@@ -198,12 +101,37 @@ default_args = {
     'on_failure_callback': failure_alert
 }
 
+PYSPARK_JOB = {
+    "reference": {"project_id": project_id},
+    "placement": {"cluster_name": cluster_name},
+    "pyspark_job": {
+        "main_python_file_uri": "gs://us-east4-vz-it-dev-wdwg-aid-d64a7958-bucket/dags/vz-it-j2lv-cmido-0/bdc_coverage/dataproc_job.py",
+        "args": [
+            "--frequency", "{{ params.frequency }}",
+            "--backfill", "{{ params.backfill }}",
+            "--backfill_start_dt", "{{ params.backfill_start_dt }}",
+            "--backfill_end_dt", "{{ params.backfill_end_dt }}"
+        ],
+        "properties": {
+            "spark.driver.cores": "4",
+            "spark.executor.cores": "4",
+            "spark.executor.memory": "6g",
+            "spark.driver.memory": "6g",
+            "spark.dynamicAllocation.enabled": "true",
+            "spark.dynamicAllocation.executorAllocationRatio": "0.6",
+            "spark.executor.instances": "2",
+            "spark.dynamicAllocation.minExecutors": "2",
+            "spark.dynamicAllocation.maxExecutors": "32"
+        }
+    }
+}
+
 with models.DAG(
-        dag_name,
+        "dg_bdc_raw_coverage",
         tags=["bdc", "coverage", "bdc_coverage"],
         default_args=default_args,
         catchup=False,
-        schedule_interval=schedule_interval,
+        schedule_interval=None,
         params={
             "frequency": "daily",
             "backfill": "False",
@@ -212,196 +140,27 @@ with models.DAG(
             "run_date": "dummy_date"
         }
 ) as dag:
+    
     task_start = EmptyOperator(
         task_id='start',
-        dag=dag)
+        dag=dag
+    )
 
-    pyspark_batch_job = {
-        "pyspark_batch": {
-            "main_python_file_uri": "gs://us-east4-vz-it-dev-wdwg-aid-d64a7958-bucket/dags/vz-it-j2lv-cmido-0/bdc_coverage/dataproc_job.py",
-            'args': ['--frequency', '{{ params.frequency }}',
-                     '--backfill', '{{ params.backfill }}',
-                    '--backfill_start_dt', '{{ params.backfill_start_dt }}',
-                    '--backfill_end_dt', '{{ params.backfill_end_dt }}'
-                    ]
-        },
-        "runtime_config": {
-            "version": '2.2',
-            "properties": {'spark.driver.cores':'4',
-                           'spark.executor.cores':'4',
-                           'spark.executor.memory': '6g',
-                           'spark.driver.memory': '6g',
-                           'spark.dynamicAllocation.enabled': 'true',
-                           'spark.dynamicAllocation.executorAllocationRatio': '0.6',
-                           'spark.executor.instances': '2',
-                           'spark.dynamicAllocation.minExecutors': '2',
-                           'spark.dynamicAllocation.maxExecutors': '32'},
-        },
-        "environment_config":{
-            "peripherals_config": {
-                "metastore_service": "projects/vz-it-np-wdwg-dev-aidcom-0/locations/us-east4/services/vz-dev-wdwg-aidcom-dpms"
-            },
-            "execution_config":{
-                "service_account": 'sa-dev-j2lv-app-cmido-0@vz-it-np-j2lv-dev-cmido-0.iam.gserviceaccount.com',
-                "subnetwork_uri": 'projects/vz-it-np-exhv-sharedvpc-228116/regions/us-east4/subnetworks/shared-np-east-green-subnet-1',
-                "kms_key": 'projects/vz-it-np-d0sv-vsadkms-0/locations/us-east4/keyRings/vz-it-np-kr-aid/cryptoKeys/vz-it-np-kms-j2lv'
-            },
-        },
-    }
-
-
-    bdc_coverage_pyspark = DataprocCreateBatchOperator(
-        task_id='bdc_raw_coverage',
-        gcp_conn_id=sa_conn_id,
+    submit_job = DataprocSubmitJobOperator(
+        task_id="bdc_raw_coverage",
         project_id=project_id,
         region=region,
-        batch_id=f"bdc-raw-coverage-{datetime.strftime(datetime.now(), '%Y-%m-%d-%H-%M-%S')}",
-        batch=pyspark_batch_job,
-        dag=dag,
+        job=PYSPARK_JOB,
+        gcp_conn_id=sa_conn_id,
         on_failure_callback=partial(observability_step_email, variables, step=3),
         on_success_callback=partial(observability_step_email, variables, step=3)
     )
+
     task_end = EmptyOperator(
         task_id='end',
         dag=dag,
         on_failure_callback=partial(observability_step_email, variables, step=5),
-        on_success_callback=partial(observability_step_email, variables, step=5))
-task_start >> bdc_coverage_pyspark >> task_end
-
-
-dataprocjob code:
-
-
-import json
-import requests
-import time
-import os
-from pathlib import Path
-import pandas
-import geopandas as gp
-import glob
-import pandas as pd
-import zipfile
-
-def getRawCoverageMetadata(input_file, output_file):
-    with open(input_file, 'r') as file:
-        data = json.load(file)
-    filtered_data = [item for item in data['data'] if item['data_type'] == 'Mobile Broadband Raw Coverage']
-    with open(output_file, 'w') as file:
-        json.dump({"data": filtered_data}, file, indent=4)
-    
-def downloadZipFiles(file_path, zipfiles_directory, headers):
-    filecount = 1
-    with open(file_path, 'r') as file:
-        data = json.load(file)
-        for entry in data['data']:
-            if filecount < 124:
-                filecount = filecount + 1
-                continue
-            entry_id = entry['id']
-            file_name = entry['file_name'] + '.zip'
-            url = f"https://broadbandmap.fcc.gov/nbm/map/api/getNBMDataDownloadFile/{entry_id}/2"
-            print(url)
-            print(file_name)
-            
-            response = requests.get(url, headers=headers)
-            with open(os.path.join(zipfiles_directory, file_name), 'wb') as output_file:
-                output_file.write(response.content)
-            time.sleep(45)
-            print(filecount)
-            filecount = filecount + 1
-
-def unzipFiles(directory, output_directory):
-    allFiles = os.listdir(directory)
-    filtered = filter(lambda singleFile: singleFile.startswith('bdc_'), allFiles)
-    filtered = list(filtered)
-    for file in filtered:
-        if file.endswith('.zip'):
-            with zipfile.ZipFile(os.path.join(directory, file), 'r') as zip_ref:
-                zip_ref.extractall(output_directory)
-
-def convertToCsv(input_directory, output_directory):
-    allFiles = os.listdir(input_directory)
-    filtered = filter(lambda singleFile: singleFile.startswith('bdc_'), allFiles)
-    filteredFiles = list(filtered)
-    for file in filteredFiles:
-        gdf = gp.read_file(os.path.join(input_directory, file))
-        csv_filename = file[:file.index('.')] + '.csv'
-        gdf.to_csv(os.path.join(output_directory, csv_filename), index=False)
-from google.cloud import storage
-
-def download_blob(bucket_name, source_blob_name, destination_file_name):
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(source_blob_name)
-    blob.download_to_filename(destination_file_name)
-    print(
-        "Downloaded storage object {} from bucket {} to local file {}.".format(
-            source_blob_name, bucket_name, destination_file_name
-        )
+        on_success_callback=partial(observability_step_email, variables, step=5)
     )
 
-from google.cloud import bigquery
-import pandas as pd
-def upload_toBQ(file):
-    df = pd.read_csv(file,
-                      dtype={'frn': str, 'providerid': str, 'mindown': str, 
-                             'minup': str, 'minsignal': str, 'environmnt': str,
-                             'brandname': str, 'technology': str, 'geometry': str})  
-    client = bigquery.Client()
-    dataset_ref = client.dataset('market_intelligence_processed')
-    table_ref = dataset_ref.table('bdc_test_data1')
-    client.load_table_from_dataframe(df, table_ref).result()
-    print(f"Done with {file}")
-import os
-def list_files(path):
-    for filename in os.listdir(path):
-        file_path = os.path.join(path, filename)
-        if os.path.isfile(file_path):
-            yield file_path
-
-def pushToBQ(folder_path):
-    for file_path in list_files(folder_path):
-        upload_toBQ(file_path)
-
-if __name__ == '__main__':
-    import json
-    headers = {
-        'accept': 'application/json, text/plain, */*',
-        'accept-language': 'en-US,en;q=0.9',
-        'cache-control': 'no-cache',
-        'pragma': 'no-cache',
-        'priority': 'u=1, i',
-        'referer': 'https://broadbandmap.fcc.gov/data-download/data-by-provider?version=jun2024',
-        'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"macOS"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-origin',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-        }
-    import shutil
-    try:
-        shutil.rmtree('/tmp/bdc')
-    except Exception as e:
-        print("File Not found!")
-    import os
-    os.mkdir('/tmp/bdc')
-    os.mkdir('/tmp/bdc/zipfiles')
-    os.mkdir('/tmp/bdc/gpkgfiles')
-    os.mkdir('/tmp/bdc/bdc_mobile_tmobile_processed')
-    zipfiles_directory = '/tmp/bdc/zipfiles'
-    metadata_file = '/tmp/bdc/raw_data.json'
-    raw_coverage_metadata_file = '/tmp/bdc/filtered_data.json'
-    data = {}
-    with open('/tmp/bdc/raw_data.json', 'w') as f:
-        json.dump(data, f)
-    download_blob("us-east4-vz-it-dev-wdwg-aid-d64a7958-bucket","dags/vz-it-j2lv-cmido-0/bdc_coverage/raw_data.json","/tmp/bdc/raw_data.json")
-    getRawCoverageMetadata(metadata_file, raw_coverage_metadata_file)
-    downloadZipFiles(raw_coverage_metadata_file, zipfiles_directory, headers)
-    gpkgfiles_directory = '/tmp/bdc/gpkgfiles'
-    unzipFiles(zipfiles_directory, gpkgfiles_directory)
-    csvfiles_directory = '/tmp/bdc/bdc_mobile_tmobile_processed'
-    convertToCsv(gpkgfiles_directory, csvfiles_directory)
-    pushToBQ(csvfiles_directory)
+    task_start >> submit_job >> task_end
