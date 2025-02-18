@@ -151,6 +151,25 @@ class PrepareSpannerData(beam.DoFn):
             video_circuit_id=self.safe_str(element.get('video_circuit_id'))
         )
 
+# Custom coder for batched data
+class ListOfConvertToSpannerMutationCoder(beam.coders.Coder):
+    def __init__(self, coder):
+        self._coder = coder
+
+    def encode(self, value):
+        return b''.join([self._coder.encode(v) for v in value])
+
+    def decode(self, value):
+        # Assuming the values are concatenated without length-prefix
+        elements = []
+        while value:
+            element, value = self._coder.decode_with_remainder(value)
+            elements.append(element)
+        return elements
+
+    def is_deterministic(self):
+        return self._coder.is_deterministic()
+
 def run(known_args, beam_args):
     options = {
         'project': known_args.project,
@@ -179,6 +198,8 @@ def run(known_args, beam_args):
             | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
             | "Batch Elements" >> BatchElements(min_batch_size=100, max_batch_size=7000)
         )
+        batched_data.set_coder(ListOfConvertToSpannerMutationCoder(beam.coders.RowCoder(ConvertToSpannerMutation)))
+        
         _ = (batched_data
             | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
                 instance_id=known_args.spanner_instance,
@@ -200,7 +221,10 @@ def parse_arguments():
     parser.add_argument('--temp_location', required=True, help='Temp GCS bucket path')
     parser.add_argument('--template_location', required=True, help='GCS bucket path to save template')
     parser.add_argument('--pubsub_subscription_name', required=True, help='Input Subscription')
-    parser.add_argument('--sdk_container_image', default='us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/wireline:1.0.0', help='sdk_container_image location')
+    parser.add_argument('--sdk_container_image', default='us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-
+
+
+sdk_container_image', default='us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/wireline:1.0.0', help='sdk_container_image location')
     parser.add_argument('--spanner_dataset', required=True, help='spanner dataset')
     parser.add_argument('--spanner_instance', required=True, help='spanner instance')
     parser.add_argument('--spanner_project', required=True, help='spanner project')
@@ -212,4 +236,4 @@ if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
     known_args, beam_args = parse_arguments()
     run(known_args, beam_args)
-    print(f'Created template at {known_args.template_location}.')\
+    print(f'Created template at {known_args.template_location}.')
