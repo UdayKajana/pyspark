@@ -178,6 +178,7 @@ def run(known_args, beam_args):
         batched_data = (windowed_data
             | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
             | "Batch Elements" >> BatchElements(min_batch_size=100, max_batch_size=7000)
+            | 'Apply Coder' >> beam.Map(lambda x: x) | beam.WithCoder(beam.coders.IterableCoder(beam.coders.RowCoder(ConvertToSpannerMutation)))
         )
         _ = (batched_data
             | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
@@ -215,8 +216,6 @@ if __name__ == '__main__':
     print(f'Created template at {known_args.template_location}.')
 
 
-with this code I am getting below error in dataflow.
-
 Error message from worker: generic::unknown: org.apache.beam.sdk.coders.CoderException: `UnknownCoderWrapper` was used to perform an actual decoding in the Java SDK. Potentially a Java transform is being followed by a cross-language transform that uses a coder that is not available in the Java SDK. Please make sure that Python transforms at the multi-language boundary use Beam portable coders.
 	org.apache.beam.sdk.util.construction.UnknownCoderWrapper.decode(UnknownCoderWrapper.java:55)
 	org.apache.beam.sdk.coders.Coder.decode(Coder.java:159)
@@ -239,6 +238,3 @@ Error message from worker: generic::unknown: org.apache.beam.sdk.coders.CoderExc
 passed through:
 ==>
     dist_proc/dax/workflow/worker/fnapi_service_impl.cc:1316
-
-
-I see a coder defines at line number ~28 in my code why even after that It is showing error?
