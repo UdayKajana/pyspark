@@ -7,8 +7,8 @@ import argparse
 import logging
 from typing import NamedTuple, Iterator, Optional
 from datetime import datetime
-from apache_beam.transforms.util import BatchElements
-from apache_beam.transforms import CombineFn
+from apache_beam.transforms.trigger import AfterWatermark, AccumulationMode
+from apache_beam.transforms.window import FixedWindows, TimestampCombiner
 
 class TemplateOptions(PipelineOptions):
     @classmethod
@@ -26,6 +26,7 @@ class ConvertToSpannerMutation(NamedTuple):
     reported_ts: Optional[str]
     data_circuit_id: Optional[str]
     video_circuit_id: Optional[str]
+
 beam.coders.registry.register_coder(ConvertToSpannerMutation, beam.coders.RowCoder)
 
 class DecodeAvroRecords(beam.DoFn):
@@ -54,7 +55,13 @@ class DecodeAvroRecords(beam.DoFn):
             fmt_msg['fetchTimestamp'] = int(time.time() * 1000)
             fmt_msg['rawdata'] = msg['rawdata']
             
-            return json.loads(fmt_msg['rawdata'])
+            try:
+                # Parse the rawdata JSON string into a dictionary
+                rawdata_dict = json.loads(fmt_msg['rawdata'])
+                return rawdata_dict
+            except json.JSONDecodeError as e:
+                logging.error(f"Error decoding rawdata JSON: {str(e)}")
+                return None
 
         message: dict = {}
         raw_schema = """{"namespace": "com.vz.vznet",
@@ -73,8 +80,6 @@ class DecodeAvroRecords(beam.DoFn):
                         {"name": "rawdata", "type": "bytes"}
                         ]}"""
         try:
-            if isinstance(raw_schema, dict):
-                raw_schema = json.dumps(raw_schema)
             schema = avro.schema.parse(raw_schema)
             avro_reader = avro_io.DatumReader(schema)
             avro_message = avro_io.BinaryDecoder(BytesIO(element))
@@ -85,80 +90,29 @@ class DecodeAvroRecords(beam.DoFn):
                 message['_event_metrics'] = message['_event_metrics'].decode("utf-8") if message['_event_metrics'] is not None else None
                 
             reformatted = reformat_input_msg_schema(message)
-            yield reformatted
+            if reformatted:
+                yield reformatted
             
         except Exception as e:
-            logging.error(f"Error processing message: {str(e)}")
+            logging.error(f"Error processing Avro message: {str(e)}")
             return
-
-class BatchSQL(CombineFn):
-    def create_accumulator(self):
-        return []
-
-    def add_input(self, accumulator, element):
-        accumulator.append(element)
-        return accumulator
-
-    def merge_accumulators(self, accumulators):
-        merged = []
-        for accumulator in accumulators:
-            merged.extend(accumulator)
-        return merged
-
-    def extract_output(self, accumulator):
-        def safe_sql_string(s):
-            if s is None:
-                return "NULL"
-            return "'" + str(s).replace("'", "''") + "'"
-
-        sql_statement_list = []
-        for record in accumulator:
-
-            telephone_number = record.get('telephone_number')
-            trouble_report_num = record.get('trouble_report_num')
-            address_id = record.get('address_id')
-            chronic_flag = record.get('chronic_flag')
-            chronic_total = record.get('chronic_total')
-            line_id_trimmed = record.get('line_id_trimmed')
-            port_associated_service = record.get('port_associated_service')
-            date_opened = record.get('date_opened')
-            data_circuit_id = record.get('data_circuit_id')
-            video_circuit_id = record.get('video_circuit_id')
-
-            # Sanitize your SQL
-            def safe_sql_string(s):
-                if s is None:
-                    return "NULL"
-                return "'" + str(s).replace("'", "''") + "'"
-
-            sql_statement = f"""
-            INSERT INTO your_spanner_table (telephone_number, trouble_report_num, address_id, chronic_flag,
-                                            chronic_total, line_id_trimmed, port_associated_service, date_opened,
-                                            data_circuit_id, video_circuit_id)
-            VALUES ({safe_sql_string(telephone_number)}, {safe_sql_string(trouble_report_num)}, {safe_sql_string(address_id)},
-                    {safe_sql_string(chronic_flag)}, {safe_sql_string(chronic_total)}, {safe_sql_string(line_id_trimmed)},
-                    {safe_sql_string(port_associated_service)}, {safe_sql_string(date_opened)}, {safe_sql_string(data_circuit_id)},
-                    {safe_sql_string(video_circuit_id)});
-            """
-            sql_statement_list.append(sql_statement)
-        return "\n".join(sql_statement_list).encode('utf-8')
 
 class PrepareSpannerData(beam.DoFn):
     def process(self, element) -> Iterator[ConvertToSpannerMutation]:
         try:
-            yield self.transform_to_mutation(element)
+            mutation = self.transform_to_mutation(element)
+            if mutation:
+                yield mutation
         except Exception as e:
             logging.error(f"Error processing element: {element}")
             logging.error(f"Error details: {str(e)}")
             return
 
     def format_date(self, value):
-        """Convert date/datetime to string format."""
         if value is None:
             return None
         try:
             if isinstance(value, str):
-                # Remove microseconds if present
                 dt = datetime.strptime(value.split('.')[0], '%Y-%m-%d %H:%M:%S')
                 return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
             return value
@@ -167,7 +121,6 @@ class PrepareSpannerData(beam.DoFn):
             return None
     
     def safe_str(self, value):
-        """Safely convert value to string."""
         if value is None:
             return None
         try:
@@ -179,15 +132,6 @@ class PrepareSpannerData(beam.DoFn):
         if not isinstance(element, dict):
             logging.error(f"Expected dictionary, got {type(element)}")
             return None
-        if 'rawdata' in element:
-            try:
-                if isinstance(element['rawdata'], str):
-                    element = json.loads(element['rawdata'])
-                elif isinstance(element['rawdata'], dict):
-                    element = element['rawdata']
-            except json.JSONDecodeError as e:
-                logging.error(f"Error decoding rawdata: {str(e)}")
-                return None
             
         return ConvertToSpannerMutation(
             telephone_number=element.get('telephone_number'),
@@ -201,59 +145,6 @@ class PrepareSpannerData(beam.DoFn):
             data_circuit_id=element.get('data_circuit_id'),
             video_circuit_id=self.safe_str(element.get('video_circuit_id'))
         )
-
-    class BatchSQL(CombineFn):
-        def create_accumulator(self):
-            return []
-
-        def add_input(self, accumulator, element):
-            accumulator.append(element)
-            return accumulator
-
-        def merge_accumulators(self, accumulators):
-            merged = []
-            for accumulator in accumulators:
-                merged.extend(accumulator)
-            return merged
-
-        def extract_output(self, accumulator):
-            # Sanitize your SQL
-            def safe_sql_string(s):
-                if s is None:
-                    return "NULL"
-                return "'" + str(s).replace("'", "''") + "'"
-
-            sql_statement_list = []
-            for record in accumulator:
-
-                telephone_number = record.get('telephone_number')
-                trouble_report_num = record.get('trouble_report_num')
-                address_id = record.get('address_id')
-                chronic_flag = record.get('chronic_flag')
-                chronic_total = record.get('chronic_total')
-                line_id_trimmed = record.get('line_id_trimmed')
-                port_associated_service = record.get('port_associated_service')
-                date_opened = record.get('date_opened')
-                data_circuit_id = record.get('data_circuit_id')
-                video_circuit_id = record.get('video_circuit_id')
-
-                # Sanitize your SQL
-                def safe_sql_string(s):
-                    if s is None:
-                        return "NULL"
-                    return "'" + str(s).replace("'", "''") + "'"
-
-                sql_statement = f"""
-                INSERT INTO your_spanner_table (telephone_number, trouble_report_num, address_id, chronic_flag,
-                                                chronic_total, line_id_trimmed, port_associated_service, date_opened,
-                                                data_circuit_id, video_circuit_id)
-                VALUES ({safe_sql_string(telephone_number)}, {safe_sql_string(trouble_report_num)}, {safe_sql_string(address_id)},
-                        {safe_sql_string(chronic_flag)}, {safe_sql_string(chronic_total)}, {safe_sql_string(line_id_trimmed)},
-                        {safe_sql_string(port_associated_service)}, {safe_sql_string(date_opened)}, {safe_sql_string(data_circuit_id)},
-                        {safe_sql_string(video_circuit_id)});
-                """
-                sql_statement_list.append(sql_statement)
-            return "\n".join(sql_statement_list).encode('utf-8')
 
 def run(known_args, beam_args):
     options = {
@@ -272,14 +163,40 @@ def run(known_args, beam_args):
     pipeline_options = PipelineOptions.from_dictionary(options)
     
     with beam.Pipeline(options=pipeline_options) as p:
+        # Read and decode data
         data = (p 
-            | "Read From Pubsub" >> beam.io.ReadFromPubSub(subscription=known_args.pubsub_subscription_name)
+            | "Read From Pubsub" >> ReadFromPubSub(
+                subscription=known_args.pubsub_subscription_name)
             | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
-            | "Windowing" >> beam.Window.into(beam.window.FixedWindows(2 * 60))
-            | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
-            | "Combine To SQL" >> beam.CombineGlobally(BatchSQL()).as_singleton_view()
         )
-        _ = (data | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
+
+        # Process and batch data
+        mutations = (data
+            | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
+            # Add timestamp to enable windowing
+            | 'Add Timestamps' >> beam.Map(
+                lambda x: beam.window.TimestampedValue(x, beam.utils.timestamp.Timestamp.now())
+            )
+            # Window into 2-minute fixed windows
+            | 'Window' >> beam.WindowInto(
+                FixedWindows(120),  # 2 minutes in seconds
+                trigger=AfterWatermark(early=None, late=None),
+                accumulation_mode=AccumulationMode.DISCARDING,
+                timestamp_combiner=TimestampCombiner.END_OF_WINDOW
+            )
+            # Batch elements in the window
+            | 'Batch Elements' >> beam.BatchElements(
+                min_batch_size=1,
+                max_batch_size=7000,  # Matches max_number_mutations
+                max_batch_duration=120  # 2 minutes in seconds
+            )
+            # Flatten batched elements
+            | 'Flatten Batches' >> beam.FlatMap(lambda batch: batch)
+        )
+
+        # Write to Spanner
+        _ = (mutations
+            | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
                 instance_id=known_args.spanner_instance,
                 database_id=known_args.spanner_dataset,
                 project_id=known_args.spanner_project,
