@@ -1,157 +1,3 @@
-import apache_beam as beam
-from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.io.gcp.pubsub import ReadFromPubSub
-import apache_beam.io.gcp.spanner as sp
-import json
-import argparse
-import logging
-from typing import NamedTuple, Iterator, Optional
-from datetime import datetime
-from apache_beam.transforms.util import BatchElements
-
-class TemplateOptions(PipelineOptions):
-    @classmethod
-    def _add_argparse_args(cls, parser):
-        parser.add_value_provider_argument('--params', type=str)
-
-class ConvertToSpannerMutation(NamedTuple):
-    telephone_number: Optional[str]
-    trouble_report_number: Optional[str]
-    address_id: Optional[str]
-    chronic_flag: Optional[str]
-    chronic_total: Optional[str]
-    circuit_id: Optional[str]
-    circuit_type: Optional[str]
-    reported_ts: Optional[str]
-    data_circuit_id: Optional[str]
-    video_circuit_id: Optional[str]
-beam.coders.registry.register_coder(ConvertToSpannerMutation, beam.coders.RowCoder)
-
-class DecodeAvroRecords(beam.DoFn):
-    def process(self, element) -> Iterator[dict]:
-        import avro.io as avro_io
-        import avro.schema
-        from io import BytesIO
-        import time
-
-        def reformat_input_msg_schema(msg):
-            fmt_msg = {}
-            fmt_msg['timestamp'] = msg['timestamp']
-            fmt_msg['host'] = msg['host']
-            fmt_msg['src'] = msg['src']
-            fmt_msg['ingressTimestamp'] = msg['_event_ingress_ts']
-            fmt_msg['origins'] = [msg['_event_origin']]
-            tags_len = len(msg['_event_tags'])
-            if tags_len > 0:
-                if msg['_event_tags'][0] != "" and msg['_event_tags'][0] is not None:
-                    fmt_msg['tags'] = msg['_event_tags']
-                else:
-                    fmt_msg['tags'] = ['Dummy']
-            else:
-                fmt_msg['tags'] = ['Dummy']
-            fmt_msg['route'] = 3
-            fmt_msg['fetchTimestamp'] = int(time.time() * 1000)
-            fmt_msg['rawdata'] = msg['rawdata']
-            
-            return json.loads(fmt_msg['rawdata'])
-
-        message: dict = {}
-        raw_schema = """{"namespace": "com.vz.vznet",
-                        "type": "record",
-                        "name": "VznetDefault",
-                        "doc": "Default schema for events in transit",
-                        "fields": [
-                        {"name": "timestamp", "type": "long"},
-                        {"name": "host", "type": "string"},
-                        {"name": "src",  "type": "string" },
-                        {"name": "_event_ingress_ts", "type": "long"},
-                        {"name": "_event_origin", "type": "string"},
-                        {"name": "_event_tags", "type": {"type": "array", "items": "string"}},
-                        {"name": "_event_route", "type": "string"},
-                        {"name": "_event_metrics", "type": ["null", "bytes"], "default": null},
-                        {"name": "rawdata", "type": "bytes"}
-                        ]}"""
-        try:
-            if isinstance(raw_schema, dict):
-                raw_schema = json.dumps(raw_schema)
-            schema = avro.schema.parse(raw_schema)
-            avro_reader = avro_io.DatumReader(schema)
-            avro_message = avro_io.BinaryDecoder(BytesIO(element))
-            message = avro_reader.read(avro_message)
-            
-            if schema.name == 'VznetDefault':
-                message['rawdata'] = message['rawdata'].decode("utf-8")
-                message['_event_metrics'] = message['_event_metrics'].decode("utf-8") if message['_event_metrics'] is not None else None
-                
-            reformatted = reformat_input_msg_schema(message)
-            yield reformatted
-            
-        except Exception as e:
-            logging.error(f"Error processing message: {str(e)}")
-            return
-
-class PrepareSpannerData(beam.DoFn):
-    def process(self, element) -> Iterator[ConvertToSpannerMutation]:
-        try:
-            yield self.transform_to_mutation(element)
-        except Exception as e:
-            logging.error(f"Error processing element: {element}")
-            logging.error(f"Error details: {str(e)}")
-            return
-
-    def format_date(self, value):
-        """Convert date/datetime to string format."""
-        if value is None:
-            return None
-        try:
-            if isinstance(value, str):
-                # Remove microseconds if present
-                dt = datetime.strptime(value.split('.')[0], '%Y-%m-%d %H:%M:%S')
-                return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-            return value
-        except Exception as e:
-            logging.error(f"Date formatting error: {str(e)}")
-            return None
-    
-    def safe_str(self, value):
-        """Safely convert value to string."""
-        if value is None:
-            return None
-        try:
-            return str(value)
-        except Exception:
-            return None
-
-    def transform_to_mutation(self, element: dict):
-        if not isinstance(element, dict):
-            logging.error(f"Expected dictionary, got {type(element)}")
-            return None
-            
-        # Extract nested rawdata if present
-        if 'rawdata' in element:
-            try:
-                if isinstance(element['rawdata'], str):
-                    element = json.loads(element['rawdata'])
-                elif isinstance(element['rawdata'], dict):
-                    element = element['rawdata']
-            except json.JSONDecodeError as e:
-                logging.error(f"Error decoding rawdata: {str(e)}")
-                return None
-            
-        return ConvertToSpannerMutation(
-            telephone_number=element.get('telephone_number'),
-            trouble_report_number=element.get('trouble_report_num'),
-            address_id=element.get('address_id'),
-            chronic_flag=element.get('chronic_flag'),
-            chronic_total=element.get('chronic_total'),
-            circuit_id=element.get('line_id_trimmed'),
-            circuit_type=element.get('port_associated_service'),
-            reported_ts=self.format_date(element.get('date_opened')),
-            data_circuit_id=element.get('data_circuit_id'),
-            video_circuit_id=self.safe_str(element.get('video_circuit_id'))
-        )
-
-# Custom coder for batched data
 class ListOfConvertToSpannerMutationCoder(beam.coders.Coder):
     def __init__(self, coder):
         self._coder = coder
@@ -169,6 +15,15 @@ class ListOfConvertToSpannerMutationCoder(beam.coders.Coder):
 
     def is_deterministic(self):
         return self._coder.is_deterministic()
+
+class PrepareSpannerData(beam.DoFn):
+    def process(self, element) -> Iterator[ConvertToSpannerMutation]:
+        try:
+            yield self.transform_to_mutation(element)
+        except Exception as e:
+            logging.error(f"Error processing element: {element}")
+            logging.error(f"Error details: {str(e)}")
+            return
 
 def run(known_args, beam_args):
     options = {
@@ -194,11 +49,13 @@ def run(known_args, beam_args):
         )
         windowed_data = (data 
             | "Windowing" >> beam.WindowInto(beam.window.FixedWindows(2 * 60)))
-        batched_data = (windowed_data
+        prepared_data = (windowed_data
             | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
+        )
+        batched_data = (prepared_data
             | "Batch Elements" >> BatchElements(min_batch_size=100, max_batch_size=7000)
         )
-        batched_data.set_coder(ListOfConvertToSpannerMutationCoder(beam.coders.RowCoder(ConvertToSpannerMutation)))
+        batched_data = batched_data | "Set Coder" >> beam.Map(lambda x: x).with_output_types(List[ConvertToSpannerMutation])
         
         _ = (batched_data
             | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
@@ -221,10 +78,7 @@ def parse_arguments():
     parser.add_argument('--temp_location', required=True, help='Temp GCS bucket path')
     parser.add_argument('--template_location', required=True, help='GCS bucket path to save template')
     parser.add_argument('--pubsub_subscription_name', required=True, help='Input Subscription')
-    parser.add_argument('--sdk_container_image', default='us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-
-
-
-sdk_container_image', default='us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/wireline:1.0.0', help='sdk_container_image location')
+    parser.add_argument('--sdk_container_image', default='us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/wireline:1.0.0', help='sdk_container_image location')
     parser.add_argument('--spanner_dataset', required=True, help='spanner dataset')
     parser.add_argument('--spanner_instance', required=True, help='spanner instance')
     parser.add_argument('--spanner_project', required=True, help='spanner project')
