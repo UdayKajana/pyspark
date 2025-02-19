@@ -75,15 +75,10 @@ class DecodeAvroRecords(beam.DoFn):
                 raw_schema = json.dumps(raw_schema)
             schema = avro.schema.parse(raw_schema)
             avro_reader = avro_io.DatumReader(schema)
-            
-            # Log the pipeline ingestion timestamp
             logging.info(f"Processing message at pipeline timestamp: {timestamp.to_utc_datetime()}")
-            
-            # Handle the element based on its type
             if isinstance(element, bytes):
                 avro_data = element
             else:
-                # If it's not bytes, try to get the data attribute (PubSub message)
                 avro_data = element.data if hasattr(element, 'data') else element
                 
             if not isinstance(avro_data, bytes):
@@ -187,11 +182,8 @@ def run(known_args, beam_args):
             )
             | "Window Into Fixed Intervals" >> beam.WindowInto(
                 beam.window.FixedWindows(2 * 60),  # 2-minute windows
-                trigger=beam.trigger.AfterWatermark(
-                    early=beam.trigger.AfterProcessingTime(delay=10),  # Emit early results every 10 seconds
-                    late=beam.trigger.AfterCount(1)  # Handle late data
-                ),
-                allowed_lateness=beam.window.Duration(seconds=300),  # Allow 5 minutes of late data
+                trigger=beam.trigger.AfterWatermark(),
+                allowed_lateness=beam.window.Duration(seconds=300),
                 accumulation_mode=beam.trigger.AccumulationMode.DISCARDING
             )
             | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
