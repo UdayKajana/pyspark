@@ -1,52 +1,38 @@
-# In the run() function, modify the pipeline as follows:
-
-def run(known_args, beam_args):
-    options = {
-        'project': known_args.project,
-        'runner': known_args.runner,
-        'region': known_args.region,
-        'staging_location': known_args.staging_location,
-        'temp_location': known_args.temp_location,
-        'template_location': known_args.template_location,
-        'save_main_session': True,
-        'streaming': True,
-        'sdk_container_image': known_args.sdk_container_image,
-        'sdk_location': 'container'
-    }
-
-    pipeline_options = PipelineOptions.from_dictionary(options)
-
-    with beam.Pipeline(options=pipeline_options) as p:
-        data = (p
-            | "Read From Pubsub" >> ReadFromPubSub(
-                subscription=f"{known_args.pubsub_subscription_name}",
-                with_attributes=True,
-                timestamp_attribute=None
-            )
-            | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
-            | "Window Into Fixed Intervals" >> beam.WindowInto(
-                beam.window.FixedWindows(120),
-                trigger=AfterWatermark(
-                    early=AfterProcessingTime(delay=beam.transforms.window.Duration(seconds=120)) | AfterCount(100),
-                    late=AfterCount(1)
-                ),
-                allowed_lateness=beam.transforms.window.Duration(seconds=300),
-                accumulation_mode=AccumulationMode.ACCUMULATING
-            )
-            | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
-            | 'Add Key' >> beam.Map(lambda x: (1, x))  # Add a key for GroupByKey
-            | 'Group Into Batches' >> beam.GroupByKey()
-            | 'Ungroup' >> beam.FlatMap(lambda x: x[1])
-        )
-
-        _ = (data
-            | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
-                instance_id=known_args.spanner_instance,
-                database_id=known_args.spanner_dataset,
-                project_id=known_args.spanner_project,
-                table=known_args.spanner_table,
-                expansion_service=known_args.expansion_service,
-                max_number_mutations=7000,
-                high_priority=True
-            )
-        )
+Traceback (most recent call last):
+  File "/usr/lib64/python3.9/runpy.py", line 197, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib64/python3.9/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 241, in <module>
+    run(known_args, beam_args)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 210, in run
+    _ = (data
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/pvalue.py", line 138, in __or__
+    return self.pipeline.apply(ptransform, self)
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/pipeline.py", line 681, in apply
+    return self.apply(
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/pipeline.py", line 692, in apply
+    return self.apply(transform, pvalueish)
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/pipeline.py", line 754, in apply
+    pvalueish_result = self.runner.apply(transform, pvalueish, self._options)
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/runners/runner.py", line 191, in apply
+    return self.apply_PTransform(transform, input, options)
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/runners/runner.py", line 195, in apply_PTransform
+    return transform.expand(input)
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/transforms/external.py", line 719, in expand
+    transform_proto.inputs[tag] = context.pcollections.get_id(pcoll)
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/runners/pipeline_context.py", line 95, in get_id
+    self._id_to_proto[id] = obj.to_runner_api(self._pipeline_context)
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/pvalue.py", line 186, in to_runner_api
+    windowing_strategy_id=context.windowing_strategies.get_id(
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/runners/pipeline_context.py", line 95, in get_id
+    self._id_to_proto[id] = obj.to_runner_api(self._pipeline_context)
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/transforms/core.py", line 3665, in to_runner_api
+    trigger=self.triggerfn.to_runner_api(context),
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/transforms/trigger.py", line 632, in to_runner_api
+    early_proto = self.early.underlying.to_runner_api(
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/transforms/trigger.py", line 950, in to_runner_api
+    main=self.triggers[0].to_runner_api(context),
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/transforms/trigger.py", line 415, in to_runner_api
+    delay=beam_runner_api_pb2.TimestampTransform.Delay(
+TypeError: 'Duration' object cannot be interpreted as an integer
