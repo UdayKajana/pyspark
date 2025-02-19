@@ -171,13 +171,13 @@ class PrepareSpannerData(beam.DoFn):
             data_circuit_id=element.get('data_circuit_id'),
             video_circuit_id=self.safe_str(element.get('video_circuit_id')),
             window_timestamp=None, # This will be populated in the process method
-            insertion_timestamp=datetime.utcnow().isoformat() # Add Insertion timestamp
+            insertion_timestamp=datetime.now(datetime.timezone.utc).isoformat() # Add Insertion timestamp
         )
 
 class AttachArrivalTimestamp(beam.DoFn):
     def process(self, element):
         """Attaches the arrival timestamp to each element."""
-        arrival_timestamp = datetime.utcnow().timestamp()  # Get current timestamp in seconds
+        arrival_timestamp = datetime.now(datetime.timezone.utc).timestamp()  # Get current timestamp in seconds
         yield beam.window.TimestampedValue(element, arrival_timestamp)
 
 
@@ -248,3 +248,65 @@ if __name__ == '__main__':
     known_args, beam_args = parse_arguments()
     run(known_args, beam_args)
     print(f'Created template at {known_args.template_location}.')
+
+Error message from worker: generic::unknown: Traceback (most recent call last):
+  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
+  File "apache_beam/runners/common.py", line 1677, in apache_beam.runners.common._OutputHandler.handle_process_outputs
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 180, in process
+AttributeError: type object 'datetime.datetime' has no attribute 'timezone'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 311, in _execute
+    response = task()
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 386, in <lambda>
+    lambda: self.create_worker().do_instruction(request), request)
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 656, in do_instruction
+    return getattr(self, request_type)(
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 694, in process_bundle
+    bundle_processor.process_bundle(instruction_id))
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/bundle_processor.py", line 1119, in process_bundle
+    input_op_by_transform_id[element.transform_id].process_encoded(
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/bundle_processor.py", line 237, in process_encoded
+    self.output(decoded_value)
+  File "apache_beam/runners/worker/operations.py", line 567, in apache_beam.runners.worker.operations.Operation.output
+  File "apache_beam/runners/worker/operations.py", line 569, in apache_beam.runners.worker.operations.Operation.output
+  File "apache_beam/runners/worker/operations.py", line 260, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
+  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
+  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 1592, in apache_beam.runners.common.DoFnRunner._reraise_augmented
+  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
+  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
+  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
+  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
+  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 1592, in apache_beam.runners.common.DoFnRunner._reraise_augmented
+  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
+  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
+  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
+  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
+  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
+  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 1613, in apache_beam.runners.common.DoFnRunner._reraise_augmented
+  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
+  File "apache_beam/runners/common.py", line 1677, in apache_beam.runners.common._OutputHandler.handle_process_outputs
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 180, in process
+AttributeError: type object 'datetime.datetime' has no attribute 'timezone' [while running 'Attach Arrival Timestamp-ptransform-49']
+
+passed through:
+==>
+    dist_proc/dax/workflow/worker/fnapi_service_impl.cc:1316
+{
+errorGroups: [1]
+httpRequest: null
+insertId: "citargbgl"
