@@ -7,7 +7,6 @@ import argparse
 import logging
 from typing import NamedTuple, Iterator, Optional
 from datetime import datetime
-from apache_beam.transforms.util import BatchElements
 
 class TemplateOptions(PipelineOptions):
     @classmethod
@@ -25,10 +24,12 @@ class ConvertToSpannerMutation(NamedTuple):
     reported_ts: Optional[str]
     data_circuit_id: Optional[str]
     video_circuit_id: Optional[str]
+    window_timestamp: Optional[str]
+    insertion_timestamp: Optional[str]
 beam.coders.registry.register_coder(ConvertToSpannerMutation, beam.coders.RowCoder)
 
 class DecodeAvroRecords(beam.DoFn):
-    def process(self, element) -> Iterator[dict]:
+    def process(self, element, timestamp=beam.DoFn.TimestampParam) -> Iterator[dict]:
         import avro.io as avro_io
         import avro.schema
         from io import BytesIO
@@ -76,31 +77,44 @@ class DecodeAvroRecords(beam.DoFn):
                 raw_schema = json.dumps(raw_schema)
             schema = avro.schema.parse(raw_schema)
             avro_reader = avro_io.DatumReader(schema)
-            avro_message = avro_io.BinaryDecoder(BytesIO(element))
+            logging.info(f"Processing message at pipeline timestamp: {timestamp.to_utc_datetime()}")
+            if isinstance(element, bytes):
+                avro_data = element
+            else:
+                avro_data = element.data if hasattr(element, 'data') else element
+                
+            if not isinstance(avro_data, bytes):
+                logging.error(f"Expected bytes, got {type(avro_data)}")
+                return
+                
+            avro_message = avro_io.BinaryDecoder(BytesIO(avro_data))
             message = avro_reader.read(avro_message)
             
             if schema.name == 'VznetDefault':
                 message['rawdata'] = message['rawdata'].decode("utf-8")
                 message['_event_metrics'] = message['_event_metrics'].decode("utf-8") if message['_event_metrics'] is not None else None
                 
-            reformatted = reformat_input_msg_schema(message)
-            yield reformatted
+            yield reformat_input_msg_schema(message)
             
         except Exception as e:
             logging.error(f"Error processing message: {str(e)}")
+            logging.error(f"Element type: {type(element)}")
+            if hasattr(element, 'data'):
+                logging.error(f"Element.data type: {type(element.data)}")
             return
 
 class PrepareSpannerData(beam.DoFn):
-    def process(self, element) -> Iterator[ConvertToSpannerMutation]:
+    def process(self, element, window=beam.DoFn.WindowParam, timestamp=beam.DoFn.TimestampParam) -> Iterator[ConvertToSpannerMutation]:
         try:
-            yield self.transform_to_mutation(element)
+            window_end = window.end.to_utc_datetime().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+            current_time = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+            yield self.transform_to_mutation(element, window_end, current_time)
         except Exception as e:
             logging.error(f"Error processing element: {element}")
             logging.error(f"Error details: {str(e)}")
             return
 
     def format_date(self, value):
-        """Convert date/datetime to string format."""
         if value is None:
             return None
         try:
@@ -113,7 +127,6 @@ class PrepareSpannerData(beam.DoFn):
             return None
     
     def safe_str(self, value):
-        """Safely convert value to string."""
         if value is None:
             return None
         try:
@@ -121,12 +134,11 @@ class PrepareSpannerData(beam.DoFn):
         except Exception:
             return None
 
-    def transform_to_mutation(self, element: dict):
+    def transform_to_mutation(self, element: dict, window_end: str, current_time: str):
         if not isinstance(element, dict):
             logging.error(f"Expected dictionary, got {type(element)}")
             return None
             
-        # Extract nested rawdata if present
         if 'rawdata' in element:
             try:
                 if isinstance(element['rawdata'], str):
@@ -147,7 +159,9 @@ class PrepareSpannerData(beam.DoFn):
             circuit_type=element.get('port_associated_service'),
             reported_ts=self.format_date(element.get('date_opened')),
             data_circuit_id=element.get('data_circuit_id'),
-            video_circuit_id=self.safe_str(element.get('video_circuit_id'))
+            video_circuit_id=self.safe_str(element.get('video_circuit_id')),
+            window_timestamp=window_end,
+            insertion_timestamp=current_time
         )
 
 def run(known_args, beam_args):
@@ -163,22 +177,26 @@ def run(known_args, beam_args):
         'sdk_container_image': known_args.sdk_container_image,
         'sdk_location': 'container'
     }
-
+    
     pipeline_options = PipelineOptions.from_dictionary(options)
     
     with beam.Pipeline(options=pipeline_options) as p:
         data = (p 
             | "Read From Pubsub" >> ReadFromPubSub(
-                subscription=f"{known_args.pubsub_subscription_name}")
+                subscription=f"{known_args.pubsub_subscription_name}",
+                with_attributes=True
+            )
+            | "Window Into Fixed Intervals" >> beam.WindowInto(
+                beam.window.FixedWindows(2 * 60),  # 2-minute windows
+                trigger=beam.trigger.AfterWatermark(),
+                allowed_lateness=beam.window.Duration(seconds=300),
+                accumulation_mode=beam.trigger.AccumulationMode.DISCARDING
+            )
             | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
-        )
-        windowed_data = (data 
-            | "Windowing" >> beam.WindowInto(beam.window.FixedWindows(2 * 60)))
-        batched_data = (windowed_data
             | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
-            | "Batch Elements" >> BatchElements(min_batch_size=100, max_batch_size=7000)
         )
-        _ = (batched_data
+
+        _ = (data
             | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
                 instance_id=known_args.spanner_instance,
                 database_id=known_args.spanner_dataset,
