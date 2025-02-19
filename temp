@@ -7,7 +7,8 @@ import argparse
 import logging
 from typing import NamedTuple, Iterator, Optional
 from datetime import datetime
-from apache_beam.transforms.util import BatchElements
+from apache_beam.transforms.window import TimestampedValue
+from apache_beam.utils.timestamp import Timestamp
 
 class TemplateOptions(PipelineOptions):
     @classmethod
@@ -53,7 +54,11 @@ class DecodeAvroRecords(beam.DoFn):
             fmt_msg['fetchTimestamp'] = int(time.time() * 1000)
             fmt_msg['rawdata'] = msg['rawdata']
             
-            return json.loads(fmt_msg['rawdata'])
+            # Yield with timestamp for windowing
+            return TimestampedValue(
+                json.loads(fmt_msg['rawdata']), 
+                Timestamp(micros=fmt_msg['timestamp'] * 1000)  # Convert to microseconds
+            )
 
         message: dict = {}
         raw_schema = """{"namespace": "com.vz.vznet",
@@ -83,8 +88,7 @@ class DecodeAvroRecords(beam.DoFn):
                     message['rawdata'] = message['rawdata'].decode("utf-8")
                     message['_event_metrics'] = message['_event_metrics'].decode("utf-8") if message['_event_metrics'] is not None else None
                     
-                reformatted = reformat_input_msg_schema(message)
-                yield reformatted
+                yield reformat_input_msg_schema(message)
             
         except Exception as e:
             logging.error(f"Error processing message: {str(e)}")
@@ -149,6 +153,7 @@ class PrepareSpannerData(beam.DoFn):
             data_circuit_id=element.get('data_circuit_id'),
             video_circuit_id=self.safe_str(element.get('video_circuit_id'))
         )
+
 def run(known_args, beam_args):
     options = {
         'project': known_args.project,
@@ -166,13 +171,23 @@ def run(known_args, beam_args):
     pipeline_options = PipelineOptions.from_dictionary(options)
     
     with beam.Pipeline(options=pipeline_options) as p:
+        # Read and process data with time-based windowing
         data = (p 
             | "Read From Pubsub" >> ReadFromPubSub(subscription=f"{known_args.pubsub_subscription_name}")
-            | "Windowing" >> beam.WindowInto(beam.window.FixedWindows(2 * 60))
-            | "Batch Elements" >> BatchElements(min_batch_size=100, max_batch_size=7000)
             | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
+            | "Window Into Fixed Intervals" >> beam.WindowInto(
+                beam.window.FixedWindows(2 * 60),  # 2-minute windows
+                trigger=beam.trigger.AfterWatermark(
+                    early=beam.trigger.AfterProcessingTime(delay=10),  # Emit early results every 10 seconds
+                    late=beam.trigger.AfterCount(1)  # Handle late data
+                ),
+                allowed_lateness=beam.window.Duration(seconds=300),  # Allow 5 minutes of late data
+                accumulation_mode=beam.trigger.AccumulationMode.DISCARDING  # Don't accumulate across triggers
+            )
             | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
         )
+
+        # Write to Spanner with window-based batching
         _ = (data
             | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
                 instance_id=known_args.spanner_instance,
@@ -180,7 +195,7 @@ def run(known_args, beam_args):
                 project_id=known_args.spanner_project,
                 table=known_args.spanner_table,
                 expansion_service=known_args.expansion_service,
-                max_number_mutations=7000,
+                max_number_mutations=7000,  # Keep this as a safety limit
                 high_priority=True
             )
         )
