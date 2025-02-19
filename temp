@@ -27,7 +27,7 @@ class ConvertToSpannerMutation(NamedTuple):
 beam.coders.registry.register_coder(ConvertToSpannerMutation, beam.coders.RowCoder)
 
 class DecodeAvroRecords(beam.DoFn):
-    def process(self, element) -> Iterator[dict]:
+    def process(self, element, timestamp=beam.DoFn.TimestampParam) -> Iterator[dict]:
         import avro.io as avro_io
         import avro.schema
         from io import BytesIO
@@ -75,17 +75,35 @@ class DecodeAvroRecords(beam.DoFn):
                 raw_schema = json.dumps(raw_schema)
             schema = avro.schema.parse(raw_schema)
             avro_reader = avro_io.DatumReader(schema)
-            for ele in element:
-                avro_message = avro_io.BinaryDecoder(BytesIO(ele))
-                message = avro_reader.read(avro_message)
-                if schema.name == 'VznetDefault':
-                    message['rawdata'] = message['rawdata'].decode("utf-8")
-                    message['_event_metrics'] = message['_event_metrics'].decode("utf-8") if message['_event_metrics'] is not None else None
-                    
-                yield reformat_input_msg_schema(message)
+            
+            # Log the pipeline ingestion timestamp
+            logging.info(f"Processing message at pipeline timestamp: {timestamp.to_utc_datetime()}")
+            
+            # Handle the element based on its type
+            if isinstance(element, bytes):
+                avro_data = element
+            else:
+                # If it's not bytes, try to get the data attribute (PubSub message)
+                avro_data = element.data if hasattr(element, 'data') else element
+                
+            if not isinstance(avro_data, bytes):
+                logging.error(f"Expected bytes, got {type(avro_data)}")
+                return
+                
+            avro_message = avro_io.BinaryDecoder(BytesIO(avro_data))
+            message = avro_reader.read(avro_message)
+            
+            if schema.name == 'VznetDefault':
+                message['rawdata'] = message['rawdata'].decode("utf-8")
+                message['_event_metrics'] = message['_event_metrics'].decode("utf-8") if message['_event_metrics'] is not None else None
+                
+            yield reformat_input_msg_schema(message)
             
         except Exception as e:
             logging.error(f"Error processing message: {str(e)}")
+            logging.error(f"Element type: {type(element)}")
+            if hasattr(element, 'data'):
+                logging.error(f"Element.data type: {type(element.data)}")
             return
 
 class PrepareSpannerData(beam.DoFn):
@@ -98,7 +116,6 @@ class PrepareSpannerData(beam.DoFn):
             return
 
     def format_date(self, value):
-        """Convert date/datetime to string format."""
         if value is None:
             return None
         try:
@@ -111,7 +128,6 @@ class PrepareSpannerData(beam.DoFn):
             return None
     
     def safe_str(self, value):
-        """Safely convert value to string."""
         if value is None:
             return None
         try:
@@ -124,7 +140,6 @@ class PrepareSpannerData(beam.DoFn):
             logging.error(f"Expected dictionary, got {type(element)}")
             return None
             
-        # Extract nested rawdata if present
         if 'rawdata' in element:
             try:
                 if isinstance(element['rawdata'], str):
@@ -165,12 +180,10 @@ def run(known_args, beam_args):
     pipeline_options = PipelineOptions.from_dictionary(options)
     
     with beam.Pipeline(options=pipeline_options) as p:
-        # Read and process data with time-based windowing
         data = (p 
             | "Read From Pubsub" >> ReadFromPubSub(
                 subscription=f"{known_args.pubsub_subscription_name}",
-                with_attributes=True,  # Include PubSub message attributes
-                timestamp_attribute=None  # Use arrival time instead of a message attribute
+                with_attributes=True
             )
             | "Window Into Fixed Intervals" >> beam.WindowInto(
                 beam.window.FixedWindows(2 * 60),  # 2-minute windows
@@ -179,14 +192,12 @@ def run(known_args, beam_args):
                     late=beam.trigger.AfterCount(1)  # Handle late data
                 ),
                 allowed_lateness=beam.window.Duration(seconds=300),  # Allow 5 minutes of late data
-                accumulation_mode=beam.trigger.AccumulationMode.DISCARDING  # Don't accumulate across triggers
+                accumulation_mode=beam.trigger.AccumulationMode.DISCARDING
             )
-            | "Extract Message Data" >> beam.Map(lambda x: x.data)  # Extract message payload
             | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
             | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
         )
 
-        # Write to Spanner
         _ = (data
             | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
                 instance_id=known_args.spanner_instance,
@@ -194,7 +205,7 @@ def run(known_args, beam_args):
                 project_id=known_args.spanner_project,
                 table=known_args.spanner_table,
                 expansion_service=known_args.expansion_service,
-                max_number_mutations=7000,  # Safety limit
+                max_number_mutations=7000,
                 high_priority=True
             )
         )
