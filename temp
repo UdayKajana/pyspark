@@ -7,8 +7,6 @@ import argparse
 import logging
 from typing import NamedTuple, Iterator, Optional
 from datetime import datetime
-from apache_beam.transforms.window import TimestampedValue
-from apache_beam.utils.timestamp import Timestamp
 
 class TemplateOptions(PipelineOptions):
     @classmethod
@@ -54,11 +52,7 @@ class DecodeAvroRecords(beam.DoFn):
             fmt_msg['fetchTimestamp'] = int(time.time() * 1000)
             fmt_msg['rawdata'] = msg['rawdata']
             
-            # Yield with timestamp for windowing
-            return TimestampedValue(
-                json.loads(fmt_msg['rawdata']), 
-                Timestamp(micros=fmt_msg['timestamp'] * 1000)  # Convert to microseconds
-            )
+            return json.loads(fmt_msg['rawdata'])
 
         message: dict = {}
         raw_schema = """{"namespace": "com.vz.vznet",
@@ -173,8 +167,11 @@ def run(known_args, beam_args):
     with beam.Pipeline(options=pipeline_options) as p:
         # Read and process data with time-based windowing
         data = (p 
-            | "Read From Pubsub" >> ReadFromPubSub(subscription=f"{known_args.pubsub_subscription_name}")
-            | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
+            | "Read From Pubsub" >> ReadFromPubSub(
+                subscription=f"{known_args.pubsub_subscription_name}",
+                with_attributes=True,  # Include PubSub message attributes
+                timestamp_attribute=None  # Use arrival time instead of a message attribute
+            )
             | "Window Into Fixed Intervals" >> beam.WindowInto(
                 beam.window.FixedWindows(2 * 60),  # 2-minute windows
                 trigger=beam.trigger.AfterWatermark(
@@ -184,10 +181,12 @@ def run(known_args, beam_args):
                 allowed_lateness=beam.window.Duration(seconds=300),  # Allow 5 minutes of late data
                 accumulation_mode=beam.trigger.AccumulationMode.DISCARDING  # Don't accumulate across triggers
             )
+            | "Extract Message Data" >> beam.Map(lambda x: x.data)  # Extract message payload
+            | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
             | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
         )
 
-        # Write to Spanner with window-based batching
+        # Write to Spanner
         _ = (data
             | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
                 instance_id=known_args.spanner_instance,
@@ -195,7 +194,7 @@ def run(known_args, beam_args):
                 project_id=known_args.spanner_project,
                 table=known_args.spanner_table,
                 expansion_service=known_args.expansion_service,
-                max_number_mutations=7000,  # Keep this as a safety limit
+                max_number_mutations=7000,  # Safety limit
                 high_priority=True
             )
         )
