@@ -115,7 +115,6 @@ class PrepareSpannerData(beam.DoFn):
             logging.error(f"Error processing element: {element}")
             logging.error(f"Error details: {str(e)}")
             return
-
     def format_date(self, value):
         if value is None:
             return None
@@ -185,17 +184,16 @@ def run(known_args, beam_args):
     with beam.Pipeline(options=pipeline_options) as p:
         data = (p
             | "Read From Pubsub" >> ReadFromPubSub(
-                subscription=f"{known_args.pubsub_subscription_name}",
-                with_attributes=True,
-                timestamp_attribute=None  # Disable PubSub timestamp to use our custom timestamp
+            subscription=f"{known_args.pubsub_subscription_name}",
+            with_attributes=True,
+            timestamp_attribute=None
             )
-            #| "Attach Arrival Timestamp" >> beam.ParDo(AttachArrivalTimestamp())  # Removed
             | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
             | "Window Into Fixed Intervals" >> beam.WindowInto(
-                beam.window.FixedWindows(120),
-                trigger=OrFinally(AfterProcessingTime(duration=120).repeat(), AfterCount(100)), # Fire after 2 minutes or 100 records
-                allowed_lateness=beam.transforms.window.Duration(seconds=300),
-                accumulation_mode=AccumulationMode.ACCUMULATING)
+            beam.window.FixedWindows(120),
+            trigger=OrFinally(AfterProcessingTime(), AfterCount(100)), # Fire after 2 minutes or 100 records
+            allowed_lateness=beam.transforms.window.Duration(seconds=300),
+            accumulation_mode=AccumulationMode.ACCUMULATING)
             | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
             | 'Group Into Batches' >> beam.GroupByKey()
             | 'Ungroup' >> beam.FlatMap(lambda x: x[1])
@@ -235,3 +233,139 @@ if __name__ == '__main__':
     known_args, beam_args = parse_arguments()
     run(known_args, beam_args)
     print(f'Created template at {known_args.template_location}.')
+
+INFO:apache_beam.typehints.native_type_compatibility:Converting string literal type hint to Any: "PubsubMessage"
+Traceback (most recent call last):
+  File "/usr/lib64/python3.9/runpy.py", line 197, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib64/python3.9/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 236, in <module>
+    run(known_args, beam_args)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 196, in run
+    trigger=OrFinally(AfterProcessingTime(duration=120).repeat(), AfterCount(100)), # Fire after 2 minutes or 100 records
+TypeError: __init__() got an unexpected keyword argument 'duration'
+(pyvenv39) tpaldgudva001:/home/udayka/python$  ^C
+(pyvenv39) tpaldgudva001:/home/udayka/python$  python3 -m  vrepair_ticket_opened_norm_v0  --project vz-it-np-gudv-dev-vzntdo-0  --runner DataflowRunner  --region us-east4   --sdk_container_image us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/py39beam26:1.0.0  --template_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/template/vrepair_ticket_opened_norm_v01  --temp_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/temp/vrepair_ticket_opened_norm_v0  --staging_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/stg/vrepair_ticket_opened_norm_v0  --pubsub_subscription_name 'projects/vz-it-np-gudv-dev-vzntdo-0/subscriptions/vz.common.vrepair.ticket.opened.norm.v0'   --spanner_project 'vz-it-np-jpuv-dev-anpdo-0'   --spanner_dataset 'wireline_churn'   --spanner_instance 'anp-spanner-instance'   --spanner_table 'vrepair_tkt_lkp1'   --expansion_service 'localhost:50768'
+INFO:apache_beam.typehints.native_type_compatibility:Converting string literal type hint to Any: "PubsubMessage"
+Traceback (most recent call last):
+  File "/usr/lib64/python3.9/runpy.py", line 197, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib64/python3.9/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 236, in <module>
+    run(known_args, beam_args)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 196, in run
+    trigger=OrFinally(AfterProcessingTime(duration=120).repeat(), AfterCount(100)), # Fire after 2 minutes or 100 records
+TypeError: __init__() got an unexpected keyword argument 'duration'
+(pyvenv39) tpaldgudva001:/home/udayka/python$  python3 -m  vrepair_ticket_opened_norm_v0  --project vz-it-np-gudv-dev-vzntdo-0  --runner DataflowRunner  --region us-east4   --sdk_container_image us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/py39beam26:1.0.0  --template_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/template/vrepair_ticket_opened_norm_v01  --temp_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/temp/vrepair_ticket_opened_norm_v0  --staging_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/stg/vrepair_ticket_opened_norm_v0  --pubsub_subscription_name 'projects/vz-it-np-gudv-dev-vzntdo-0/subscriptions/vz.common.vrepair.ticket.opened.norm.v0'   --spanner_project 'vz-it-np-jpuv-dev-anpdo-0'   --spanner_dataset 'wireline_churn'   --spanner_instance 'anp-spanner-instance'   --spanner_table 'vrepair_tkt_lkp1'   --expansion_service 'localhost:50768'
+INFO:apache_beam.typehints.native_type_compatibility:Converting string literal type hint to Any: "PubsubMessage"
+Traceback (most recent call last):
+  File "/usr/lib64/python3.9/runpy.py", line 197, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib64/python3.9/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 236, in <module>
+    run(known_args, beam_args)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 196, in run
+    trigger=OrFinally(AfterProcessingTime(seconds=120).repeat(), AfterCount(100)), # Fire after 2 minutes or 100 records
+TypeError: __init__() got an unexpected keyword argument 'seconds'
+(pyvenv39) tpaldgudva001:/home/udayka/python$  ^C
+(pyvenv39) tpaldgudva001:/home/udayka/python$  python3 -m  vrepair_ticket_opened_norm_v0  --project vz-it-np-gudv-dev-vzntdo-0  --runner DataflowRunner  --region us-east4   --sdk_container_image us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/py39beam26:1.0.0  --template_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/template/vrepair_ticket_opened_norm_v01  --temp_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/temp/vrepair_ticket_opened_norm_v0  --staging_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/stg/vrepair_ticket_opened_norm_v0  --pubsub_subscription_name 'projects/vz-it-np-gudv-dev-vzntdo-0/subscriptions/vz.common.vrepair.ticket.opened.norm.v0'   --spanner_project 'vz-it-np-jpuv-dev-anpdo-0'   --spanner_dataset 'wireline_churn'   --spanner_instance 'anp-spanner-instance'   --spanner_table 'vrepair_tkt_lkp1'   --expansion_service 'localhost:50768'
+INFO:apache_beam.typehints.native_type_compatibility:Converting string literal type hint to Any: "PubsubMessage"
+Traceback (most recent call last):
+  File "/usr/lib64/python3.9/runpy.py", line 197, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib64/python3.9/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 236, in <module>
+    run(known_args, beam_args)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 196, in run
+    trigger=OrFinally(AfterProcessingTime().repeat(), AfterCount(100)), # Fire after 2 minutes or 100 records
+AttributeError: 'AfterProcessingTime' object has no attribute 'repeat'
+(pyvenv39) tpaldgudva001:/home/udayka/python$  ^C
+(pyvenv39) tpaldgudva001:/home/udayka/python$  python3 -m  vrepair_ticket_opened_norm_v0  --project vz-it-np-gudv-dev-vzntdo-0  --runner DataflowRunner  --region us-east4   --sdk_container_image us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/py39beam26:1.0.0  --template_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/template/vrepair_ticket_opened_norm_v01  --temp_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/temp/vrepair_ticket_opened_norm_v0  --staging_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/stg/vrepair_ticket_opened_norm_v0  --pubsub_subscription_name 'projects/vz-it-np-gudv-dev-vzntdo-0/subscriptions/vz.common.vrepair.ticket.opened.norm.v0'   --spanner_project 'vz-it-np-jpuv-dev-anpdo-0'   --spanner_dataset 'wireline_churn'   --spanner_instance 'anp-spanner-instance'   --spanner_table 'vrepair_tkt_lkp1'   --expansion_service 'localhost:50768'
+INFO:apache_beam.typehints.native_type_compatibility:Converting string literal type hint to Any: "PubsubMessage"
+Traceback (most recent call last):
+  File "/usr/lib64/python3.9/runpy.py", line 197, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib64/python3.9/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 235, in <module>
+    run(known_args, beam_args)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 186, in run
+    data = (p
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/pvalue.py", line 138, in __or__
+    return self.pipeline.apply(ptransform, self)
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/pipeline.py", line 681, in apply
+    return self.apply(
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/pipeline.py", line 692, in apply
+    return self.apply(transform, pvalueish)
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/pipeline.py", line 752, in apply
+    transform.type_check_inputs(pvalueish)
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/transforms/ptransform.py", line 469, in type_check_inputs
+    self.type_check_inputs_or_outputs(pvalueish, 'input')
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/transforms/ptransform.py", line 498, in type_check_inputs_or_outputs
+    raise TypeCheckError(
+apache_beam.typehints.decorators.TypeCheckError: Input type hint violation at Group Into Batches: expected Tuple[TypeVariable[K], TypeVariable[V]], got <class '__main__.ConvertToSpannerMutation'>
+Full type hint:
+IOTypeHints[inputs=((Tuple[TypeVariable[K], TypeVariable[V]],), {}), outputs=((Tuple[TypeVariable[K], Iterable[TypeVariable[V]]],), {})]
+File "<frozen importlib._bootstrap>", line 680, in _load_unlocked
+File "<frozen importlib._bootstrap_external>", line 850, in exec_module
+File "<frozen importlib._bootstrap>", line 228, in _call_with_frames_removed
+File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/transforms/core.py", line 3210, in <module>
+    class GroupByKey(PTransform):
+File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/typehints/decorators.py", line 774, in annotate_input_types
+    th = getattr(f, '_type_hints', IOTypeHints.empty()).with_input_types(
+
+based on:
+  IOTypeHints[inputs=None, outputs=((Tuple[TypeVariable[K], Iterable[TypeVariable[V]]],), {})]
+  File "<frozen importlib._bootstrap>", line 680, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 850, in exec_module
+  File "<frozen importlib._bootstrap>", line 228, in _call_with_frames_removed
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/transforms/core.py", line 3210, in <module>
+      class GroupByKey(PTransform):
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/typehints/decorators.py", line 861, in annotate_output_types
+      f._type_hints = th.with_output_types(return_type_hint)  # pylint: disable=protected-access
+(pyvenv39) tpaldgudva001:/home/udayka/python$  python3 -m  vrepair_ticket_opened_norm_v0  --project vz-it-np-gudv-dev-vzntdo-0  --runner DataflowRunner  --region us-east4   --sdk_container_image us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/py39beam26:1.0.0  --template_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/template/vrepair_ticket_opened_norm_v01  --temp_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/temp/vrepair_ticket_opened_norm_v0  --staging_location gs://gudv-dev-vzntdo-0-usmr-internal/cicd/dataflow/wc/stg/vrepair_ticket_opened_norm_v0  --pubsub_subscription_name 'projects/vz-it-np-gudv-dev-vzntdo-0/subscriptions/vz.common.vrepair.ticket.opened.norm.v0'   --spanner_project 'vz-it-np-jpuv-dev-anpdo-0'   --spanner_dataset 'wireline_churn'   --spanner_instance 'anp-spanner-instance'   --spanner_table 'vrepair_tkt_lkp1'   --expansion_service 'localhost:50768'
+Traceback (most recent call last):
+  File "/usr/lib64/python3.9/runpy.py", line 197, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib64/python3.9/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 233, in <module>
+    run(known_args, beam_args)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 186, in run
+    data = (p
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/pvalue.py", line 138, in __or__
+    return self.pipeline.apply(ptransform, self)
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/pipeline.py", line 681, in apply
+    return self.apply(
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/pipeline.py", line 692, in apply
+    return self.apply(transform, pvalueish)
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/pipeline.py", line 752, in apply
+    transform.type_check_inputs(pvalueish)
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/transforms/ptransform.py", line 469, in type_check_inputs
+    self.type_check_inputs_or_outputs(pvalueish, 'input')
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/transforms/ptransform.py", line 498, in type_check_inputs_or_outputs
+    raise TypeCheckError(
+apache_beam.typehints.decorators.TypeCheckError: Input type hint violation at Group Into Batches: expected Tuple[TypeVariable[K], TypeVariable[V]], got <class '__main__.ConvertToSpannerMutation'>
+Full type hint:
+IOTypeHints[inputs=((Tuple[TypeVariable[K], TypeVariable[V]],), {}), outputs=((Tuple[TypeVariable[K], Iterable[TypeVariable[V]]],), {})]
+File "<frozen importlib._bootstrap>", line 680, in _load_unlocked
+File "<frozen importlib._bootstrap_external>", line 850, in exec_module
+File "<frozen importlib._bootstrap>", line 228, in _call_with_frames_removed
+File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/transforms/core.py", line 3210, in <module>
+    class GroupByKey(PTransform):
+File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/typehints/decorators.py", line 774, in annotate_input_types
+    th = getattr(f, '_type_hints', IOTypeHints.empty()).with_input_types(
+
+based on:
+  IOTypeHints[inputs=None, outputs=((Tuple[TypeVariable[K], Iterable[TypeVariable[V]]],), {})]
+  File "<frozen importlib._bootstrap>", line 680, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 850, in exec_module
+  File "<frozen importlib._bootstrap>", line 228, in _call_with_frames_removed
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/transforms/core.py", line 3210, in <module>
+      class GroupByKey(PTransform):
+  File "/apps/opt/application/vznet/pyvenv39/lib64/python3.9/site-packages/apache_beam/typehints/decorators.py", line 861, in annotate_output_types
+      f._type_hints = th.with_output_types(return_type_hint)  # pylint: disable=protected-access
