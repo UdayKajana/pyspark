@@ -187,7 +187,7 @@ def run(known_args, beam_args):
                 with_attributes=True
             )
             | "Window Into Fixed Intervals" >> beam.WindowInto(
-                beam.window.FixedWindows(2 * 60),  # 2-minute windows
+                beam.window.FixedWindows(2 * 60),
                 trigger=beam.trigger.AfterWatermark(),
                 allowed_lateness=beam.window.Duration(seconds=300),
                 accumulation_mode=beam.trigger.AccumulationMode.DISCARDING
