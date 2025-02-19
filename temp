@@ -6,7 +6,7 @@ import json
 import argparse
 import logging
 from typing import NamedTuple, Iterator, Optional
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 class TemplateOptions(PipelineOptions):
     @classmethod
@@ -107,11 +107,9 @@ class PrepareSpannerData(beam.DoFn):
     def process(self, element, window=beam.DoFn.WindowParam) -> Iterator[ConvertToSpannerMutation]:
         try:
             # Access window information to generate a window timestamp
-            window_start = window.start.to_utc_datetime()
-
-            # Ensure the datetime object is timezone-aware (compatible with older Python versions)
-            window_start_utc = window_start - window_start.utcoffset() if window_start.utcoffset() else window_start
-
+            # Ensure the datetime object is timezone-aware
+            window_start_utc = window.start.to_utc_datetime().replace(tzinfo=timezone.utc)
+            
             # Format it as a string Spanner expects, including UTC timezone
             window_start_str = window_start_utc.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
@@ -134,9 +132,9 @@ class PrepareSpannerData(beam.DoFn):
                 dt = datetime.strptime(value.split('.')[0], '%Y-%m-%d %H:%M:%S')
                 return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
             return value
-    except Exception as e:
-        logging.error(f"Date formatting error: {str(e)}")
-        return None
+        except Exception as e:
+            logging.error(f"Date formatting error: {str(e)}")
+            return None
     
     def safe_str(self, value):
         if value is None:
@@ -173,13 +171,13 @@ class PrepareSpannerData(beam.DoFn):
             data_circuit_id=element.get('data_circuit_id'),
             video_circuit_id=self.safe_str(element.get('video_circuit_id')),
             window_timestamp=None, # This will be populated in the process method
-            insertion_timestamp=datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ') # Add Insertion timestamp
+            insertion_timestamp=datetime.now(datetime.timezone.utc).isoformat() # Add Insertion timestamp
         )
 
 class AttachArrivalTimestamp(beam.DoFn):
     def process(self, element):
         """Attaches the arrival timestamp to each element."""
-        arrival_timestamp = datetime.utcnow().timestamp()  # Get current timestamp in seconds
+        arrival_timestamp = datetime.now(datetime.timezone.utc).timestamp()  # Get current timestamp in seconds
         yield beam.window.TimestampedValue(element, arrival_timestamp)
 
 
