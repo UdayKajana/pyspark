@@ -1,1 +1,1 @@
-gcloud spanner databases execute-sql wireline_churn --instance="anp-spanner-instance" --project="vz-it-np-jpuv-dev-anpdo-0" --sql="SELECT count(*) FROM vrepair_tkt_lkp"
+watch 'gcloud spanner databases execute-sql wireline_churn --instance="anp-spanner-instance" --project="vz-it-np-jpuv-dev-anpdo-0" --sql="SELECT count(*) FROM vrepair_tkt_lkp"'
