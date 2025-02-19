@@ -79,7 +79,6 @@ class DecodeAvroRecords(beam.DoFn):
             for ele in element:
                 avro_message = avro_io.BinaryDecoder(BytesIO(ele))
                 message = avro_reader.read(avro_message)
-                
                 if schema.name == 'VznetDefault':
                     message['rawdata'] = message['rawdata'].decode("utf-8")
                     message['_event_metrics'] = message['_event_metrics'].decode("utf-8") if message['_event_metrics'] is not None else None
@@ -168,8 +167,7 @@ def run(known_args, beam_args):
     
     with beam.Pipeline(options=pipeline_options) as p:
         data = (p 
-            | "Read From Pubsub" >> ReadFromPubSub(
-                subscription=f"{known_args.pubsub_subscription_name}")
+            | "Read From Pubsub" >> ReadFromPubSub(subscription=f"{known_args.pubsub_subscription_name}")
             | "Windowing" >> beam.WindowInto(beam.window.FixedWindows(2 * 60))
             | "Batch Elements" >> BatchElements(min_batch_size=100, max_batch_size=7000)
             | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
