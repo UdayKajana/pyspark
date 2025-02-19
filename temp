@@ -253,3 +253,15 @@ if __name__ == '__main__':
     known_args, beam_args = parse_arguments()
     run(known_args, beam_args)
     print(f'Created template at {known_args.template_location}.')
+
+
+Traceback (most recent call last):
+  File "/usr/lib64/python3.9/runpy.py", line 197, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib64/python3.9/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 254, in <module>
+    run(known_args, beam_args)
+  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 212, in run
+    early=beam.trigger.AfterProcessingTime(delay=beam.Duration(seconds=120)),
+AttributeError: module 'apache_beam' has no attribute 'Duration'
