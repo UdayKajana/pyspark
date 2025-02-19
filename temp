@@ -53,7 +53,6 @@ class DecodeAvroRecords(beam.DoFn):
             fmt_msg['route'] = 3
             fmt_msg['fetchTimestamp'] = int(time.time() * 1000)
             fmt_msg['rawdata'] = msg['rawdata']
-            
             return json.loads(fmt_msg['rawdata'])
 
         message: dict = {}
@@ -106,23 +105,15 @@ class DecodeAvroRecords(beam.DoFn):
 class PrepareSpannerData(beam.DoFn):
     def process(self, element, window=beam.DoFn.WindowParam) -> Iterator[ConvertToSpannerMutation]:
         try:
-            # Access window information to generate a window timestamp
             window_start_utc = window.start.to_utc_datetime()
-            
-            # Format it as a string Spanner expects
             window_start_str = window_start_utc.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-
-            # Transform the element and add window_timestamp
-            mutation = self.transform_to_mutation(element, window_start_str)
-            
-            # If transformation was successful, add window timestamp and yield
+            mutation = self.transform_to_mutation(element)
             if mutation:
-                yield mutation
+                yield mutation._replace(window_timestamp=window_start_str)
         except Exception as e:
             logging.error(f"Error processing element: {element}")
             logging.error(f"Error details: {str(e)}")
             return
-
     def format_date(self, value):
         """Convert date/datetime to string format."""
         if value is None:
@@ -144,9 +135,7 @@ class PrepareSpannerData(beam.DoFn):
             return str(value)
         except Exception:
             return None
-
-    def transform_to_mutation(self, element: dict, window_start_str: str):
-        """Transforms a dictionary to a ConvertToSpannerMutation NamedTuple."""
+    def transform_to_mutation(self, element: dict):
         if not isinstance(element, dict):
             logging.error(f"Expected dictionary, got {type(element)}")
             return None
@@ -169,19 +158,18 @@ class PrepareSpannerData(beam.DoFn):
             address_id=element.get('address_id'),
             chronic_flag=element.get('chronic_flag'),
             chronic_total=element.get('chronic_total'),
-            circuit_id=self.safe_str(element.get('line_id_trimmed')),  # Ensure circuit_id is always a string
+            circuit_id=element.get('line_id_trimmed'),
             circuit_type=element.get('port_associated_service'),
             reported_ts=self.format_date(element.get('date_opened')),
             data_circuit_id=element.get('data_circuit_id'),
             video_circuit_id=self.safe_str(element.get('video_circuit_id')),
-            window_timestamp=window_start_str,  # Set the window timestamp here
-            insertion_timestamp=current_time
+            window_timestamp=None,  # This will be populated in the process method
+            insertion_timestamp=current_time  # Add Insertion timestamp
         )
 
 class AttachArrivalTimestamp(beam.DoFn):
     def process(self, element):
-        """Attaches the arrival timestamp to each element."""
-        arrival_timestamp = datetime.utcnow().timestamp()
+        arrival_timestamp = datetime.now().timestamp()
         yield beam.window.TimestampedValue(element, arrival_timestamp)
 
 def run(known_args, beam_args):
@@ -206,10 +194,10 @@ def run(known_args, beam_args):
                 subscription=f"{known_args.pubsub_subscription_name}",
                 with_attributes=True
             )
-            | "Attach Arrival Timestamp" >> beam.ParDo(AttachArrivalTimestamp()) # Attach timestamp when reading
-            | "Decode Avro" >> beam.ParDo(DecodeAvroRecords()) # Decode Avro Records
+            | "Attach Arrival Timestamp" >> beam.ParDo(AttachArrivalTimestamp())
+            | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
             | "Window Into Fixed Intervals" >> beam.WindowInto(
-                beam.window.FixedWindows(2 * 60),  # 2-minute windows
+                beam.window.FixedWindows(2 * 60),
                 trigger=beam.trigger.AfterWatermark(),
                 allowed_lateness=beam.window.Duration(seconds=300),
                 accumulation_mode=beam.trigger.AccumulationMode.DISCARDING
@@ -218,7 +206,6 @@ def run(known_args, beam_args):
         )
 
         _ = (data
-            | "Log Windowed Data" >> beam.Map(logging.info)  # Log the windowed data for debugging
             | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
                 instance_id=known_args.spanner_instance,
                 database_id=known_args.spanner_dataset,
