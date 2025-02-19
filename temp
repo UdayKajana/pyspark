@@ -1,8 +1,311 @@
-class AttachArrivalTimestamp(beam.DoFn):
-    def process(self, element):
-        """Attaches the arrival timestamp to each element."""
-        arrival_timestamp = datetime.now().timestamp()  # Get current timestamp in seconds
-        yield beam.window.TimestampedValue(element, arrival_timestamp)
+telephone_number                trouble_report_number  address_id  chronic_flag                                                                              chronic_total  circuit_id     circuit_type  reported_ts           data_circuit_id  video_circuit_id  window_timestamp      insertion_timestamp
+2022-12-02 05:00:00.000000 UTC  TR102810               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:23.410565Z
+2022-12-02 05:00:00.000000 UTC  TR103183               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.471527Z
+2022-12-02 05:00:00.000000 UTC  TR103597               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:17.930767Z
+2022-12-02 05:00:00.000000 UTC  TR114823               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:17.423353Z
+2022-12-02 05:00:00.000000 UTC  TR130484               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:20.869842Z
+2022-12-02 05:00:00.000000 UTC  TR136620               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:15.21844Z
+2022-12-02 05:00:00.000000 UTC  TR136760               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:14.583111Z
+2022-12-02 05:00:00.000000 UTC  TR142663               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:22.351056Z
+2022-12-02 05:00:00.000000 UTC  TR144334               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:30.135141Z
+2022-12-02 05:00:00.000000 UTC  TR156720               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:22.07038Z
+2022-12-02 05:00:00.000000 UTC  TR160876               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.844871Z
+2022-12-02 05:00:00.000000 UTC  TR163690               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:22.224771Z
+2022-12-02 05:00:00.000000 UTC  TR163868               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:30.205811Z
+2022-12-02 05:00:00.000000 UTC  TR171330               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:15.532732Z
+2022-12-02 05:00:00.000000 UTC  TR172600               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:18.161758Z
+2022-12-02 05:00:00.000000 UTC  TR175477               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:20.859434Z
+2022-12-02 05:00:00.000000 UTC  TR181468               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:15.426385Z
+2022-12-02 05:00:00.000000 UTC  TR187243               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.295487Z
+2022-12-02 05:00:00.000000 UTC  TR192528               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:24.357172Z
+2022-12-02 05:00:00.000000 UTC  TR200636               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:23.023744Z
+2022-12-02 05:00:00.000000 UTC  TR201599               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:22.42527Z
+2022-12-02 05:00:00.000000 UTC  TR204382               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:14.814068Z
+2022-12-02 05:00:00.000000 UTC  TR205211               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:30.164711Z
+2022-12-02 05:00:00.000000 UTC  TR221282               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.584661Z
+2022-12-02 05:00:00.000000 UTC  TR222878               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:14.576766Z
+2022-12-02 05:00:00.000000 UTC  TR223660               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:16.501397Z
+2022-12-02 05:00:00.000000 UTC  TR231255               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.822509Z
+2022-12-02 05:00:00.000000 UTC  TR233384               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:22.254359Z
+2022-12-02 05:00:00.000000 UTC  TR244190               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:30.076284Z
+2022-12-02 05:00:00.000000 UTC  TR249991               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.722348Z
+2022-12-02 05:00:00.000000 UTC  TR250730               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:20.854107Z
+2022-12-02 05:00:00.000000 UTC  TR260452               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.507351Z
+2022-12-02 05:00:00.000000 UTC  TR264449               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.66429Z
+2022-12-02 05:00:00.000000 UTC  TR270984               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:19.494715Z
+2022-12-02 05:00:00.000000 UTC  TR272348               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:30.184876Z
+2022-12-02 05:00:00.000000 UTC  TR275410               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.677317Z
+2022-12-02 05:00:00.000000 UTC  TR275894               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.955785Z
+2022-12-02 05:00:00.000000 UTC  TR281366               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.434979Z
+2022-12-02 05:00:00.000000 UTC  TR283164               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:19.374358Z
+2022-12-02 05:00:00.000000 UTC  TR285010               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:21.064821Z
+2022-12-02 05:00:00.000000 UTC  TR295350               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:15.717639Z
+2022-12-02 05:00:00.000000 UTC  TR303790               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.364338Z
+2022-12-02 05:00:00.000000 UTC  TR305095               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.949459Z
+2022-12-02 05:00:00.000000 UTC  TR308210               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.03725Z
+2022-12-02 05:00:00.000000 UTC  TR308598               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:24.149478Z
+2022-12-02 05:00:00.000000 UTC  TR308609               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:14.922604Z
+2022-12-02 05:00:00.000000 UTC  TR308994               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:19.577869Z
+2022-12-02 05:00:00.000000 UTC  TR309582               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.460439Z
+2022-12-02 05:00:00.000000 UTC  TR311137               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:18.2327Z
+2022-12-02 05:00:00.000000 UTC  TR318899               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:16.978919Z
+2022-12-02 05:00:00.000000 UTC  TR320854               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.321952Z
+2022-12-02 05:00:00.000000 UTC  TR328736               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:24.149478Z
+2022-12-02 05:00:00.000000 UTC  TR340932               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:14.608063Z
+2022-12-02 05:00:00.000000 UTC  TR344619               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:19.811221Z
+2022-12-02 05:00:00.000000 UTC  TR346033               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:19.317333Z
+2022-12-02 05:00:00.000000 UTC  TR354192               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.578366Z
+2022-12-02 05:00:00.000000 UTC  TR355773               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:18.391175Z
+2022-12-02 05:00:00.000000 UTC  TR357330               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:20.202464Z
+2022-12-02 05:00:00.000000 UTC  TR357552               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:15.022028Z
+2022-12-02 05:00:00.000000 UTC  TR359504               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:23.680118Z
+2022-12-02 05:00:00.000000 UTC  TR360054               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:20.139501Z
+2022-12-02 05:00:00.000000 UTC  TR361489               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:21.265534Z
+2022-12-02 05:00:00.000000 UTC  TR363149               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:23.387914Z
+2022-12-02 05:00:00.000000 UTC  TR367795               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.50464Z
+2022-12-02 05:00:00.000000 UTC  TR367873               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:23.245616Z
+2022-12-02 05:00:00.000000 UTC  TR378452               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.867107Z
+2022-12-02 05:00:00.000000 UTC  TR379730               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.493994Z
+2022-12-02 05:00:00.000000 UTC  TR379794               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.026196Z
+2022-12-02 05:00:00.000000 UTC  TR381959               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.425697Z
+2022-12-02 05:00:00.000000 UTC  TR388149               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.143648Z
+2022-12-02 05:00:00.000000 UTC  TR398014               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.840253Z
+2022-12-02 05:00:00.000000 UTC  TR399215               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:20.864455Z
+2022-12-02 05:00:00.000000 UTC  TR400118               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:16.689304Z
+2022-12-02 05:00:00.000000 UTC  TR402320               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:16.975521Z
+2022-12-02 05:00:00.000000 UTC  TR405396               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:21.518898Z
+2022-12-02 05:00:00.000000 UTC  TR411376               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.698188Z
+2022-12-02 05:00:00.000000 UTC  TR413658               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:16.574327Z
+2022-12-02 05:00:00.000000 UTC  TR418484               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.159185Z
+2022-12-02 05:00:00.000000 UTC  TR423836               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:16.052792Z
+2022-12-02 05:00:00.000000 UTC  TR429241               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.909421Z
+2022-12-02 05:00:00.000000 UTC  TR433895               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.325421Z
+2022-12-02 05:00:00.000000 UTC  TR445623               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:14.629084Z
+2022-12-02 05:00:00.000000 UTC  TR452700               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:16.77806Z
+2022-12-02 05:00:00.000000 UTC  TR455576               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:20.446205Z
+2022-12-02 05:00:00.000000 UTC  TR466362               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.057304Z
+2022-12-02 05:00:00.000000 UTC  TR478537               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.294126Z
+2022-12-02 05:00:00.000000 UTC  TR479166               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:21.660099Z
+2022-12-02 05:00:00.000000 UTC  TR484599               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.790549Z
+2022-12-02 05:00:00.000000 UTC  TR484665               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.603804Z
+2022-12-02 05:00:00.000000 UTC  TR489056               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:23.563165Z
+2022-12-02 05:00:00.000000 UTC  TR534269               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.763382Z
+2022-12-02 05:00:00.000000 UTC  TR534523               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:14.559144Z
+2022-12-02 05:00:00.000000 UTC  TR540339               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.268152Z
+2022-12-02 05:00:00.000000 UTC  TR544711               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:22.699391Z
+2022-12-02 05:00:00.000000 UTC  TR544793               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:30.248899Z
+2022-12-02 05:00:00.000000 UTC  TR550190               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:19.918299Z
+2022-12-02 05:00:00.000000 UTC  TR554215               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.403258Z
+2022-12-02 05:00:00.000000 UTC  TR567131               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:15.738754Z
+2022-12-02 05:00:00.000000 UTC  TR572664               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.217537Z
+2022-12-02 05:00:00.000000 UTC  TR579651               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.281962Z
+2022-12-02 05:00:00.000000 UTC  TR582528               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:16.383922Z
+2022-12-02 05:00:00.000000 UTC  TR586388               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:18.670644Z
+2022-12-02 05:00:00.000000 UTC  TR598979               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:14.755598Z
+2022-12-02 05:00:00.000000 UTC  TR625394               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.542273Z
+2022-12-02 05:00:00.000000 UTC  TR626566               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:20.926263Z
+2022-12-02 05:00:00.000000 UTC  TR633286               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.132339Z
+2022-12-02 05:00:00.000000 UTC  TR634935               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:30.230203Z
+2022-12-02 05:00:00.000000 UTC  TR635851               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:20.204484Z
+2022-12-02 05:00:00.000000 UTC  TR636139               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:16.331706Z
+2022-12-02 05:00:00.000000 UTC  TR639609               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:17.423453Z
+2022-12-02 05:00:00.000000 UTC  TR651062               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:20.614776Z
+2022-12-02 05:00:00.000000 UTC  TR651545               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.369811Z
+2022-12-02 05:00:00.000000 UTC  TR652352               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.486729Z
+2022-12-02 05:00:00.000000 UTC  TR654871               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.518431Z
+2022-12-02 05:00:00.000000 UTC  TR655466               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:21.353016Z
+2022-12-02 05:00:00.000000 UTC  TR660638               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.021801Z
+2022-12-02 05:00:00.000000 UTC  TR662657               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:21.233043Z
+2022-12-02 05:00:00.000000 UTC  TR663386               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.079898Z
+2022-12-02 05:00:00.000000 UTC  TR664862               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.431349Z
+2022-12-02 05:00:00.000000 UTC  TR667491               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.757338Z
+2022-12-02 05:00:00.000000 UTC  TR673632               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.579195Z
+2022-12-02 05:00:00.000000 UTC  TR674847               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.353781Z
+2022-12-02 05:00:00.000000 UTC  TR680702               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.256572Z
+2022-12-02 05:00:00.000000 UTC  TR682946               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.624733Z
+2022-12-02 05:00:00.000000 UTC  TR688348               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:20.556927Z
+2022-12-02 05:00:00.000000 UTC  TR693883               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:20.343203Z
+2022-12-02 05:00:00.000000 UTC  TR695637               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:19.708634Z
+2022-12-02 05:00:00.000000 UTC  TR698798               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:15.826124Z
+2022-12-02 05:00:00.000000 UTC  TR699236               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:17.515719Z
+2022-12-02 05:00:00.000000 UTC  TR702163               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.005016Z
+2022-12-02 05:00:00.000000 UTC  TR702422               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:15.308991Z
+2022-12-02 05:00:00.000000 UTC  TR707077               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:18.070177Z
+2022-12-02 05:00:00.000000 UTC  TR708581               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:30.103808Z
+2022-12-02 05:00:00.000000 UTC  TR712164               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.466072Z
+2022-12-02 05:00:00.000000 UTC  TR712978               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:22.92086Z
+2022-12-02 05:00:00.000000 UTC  TR715673               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:22.592945Z
+2022-12-02 05:00:00.000000 UTC  TR715864               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:18.615966Z
+2022-12-02 05:00:00.000000 UTC  TR720853               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:30.02573Z
+2022-12-02 05:00:00.000000 UTC  TR722918               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:18.875916Z
+2022-12-02 05:00:00.000000 UTC  TR729029               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:22.838602Z
+2022-12-02 05:00:00.000000 UTC  TR732877               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:18.790054Z
+2022-12-02 05:00:00.000000 UTC  TR735746               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.528414Z
+2022-12-02 05:00:00.000000 UTC  TR736262               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:17.930768Z
+2022-12-02 05:00:00.000000 UTC  TR750089               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:30.270742Z
+2022-12-02 05:00:00.000000 UTC  TR757394               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:19.133186Z
+2022-12-02 05:00:00.000000 UTC  TR764722               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.811188Z
+2022-12-02 05:00:00.000000 UTC  TR767721               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:22.224774Z
+2022-12-02 05:00:00.000000 UTC  TR773793               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.905429Z
+2022-12-02 05:00:00.000000 UTC  TR774972               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:24.298257Z
+2022-12-02 05:00:00.000000 UTC  TR779561               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.800819Z
+2022-12-02 05:00:00.000000 UTC  TR785678               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.049064Z
+2022-12-02 05:00:00.000000 UTC  TR788335               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:20.022889Z
+2022-12-02 05:00:00.000000 UTC  TR797814               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.470908Z
+2022-12-02 05:00:00.000000 UTC  TR810895               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:20.917227Z
+2022-12-02 05:00:00.000000 UTC  TR813653               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:15.21844Z
+2022-12-02 05:00:00.000000 UTC  TR823195               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.296052Z
+2022-12-02 05:00:00.000000 UTC  TR826887               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:23.758313Z
+2022-12-02 05:00:00.000000 UTC  TR829955               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.915053Z
+2022-12-02 05:00:00.000000 UTC  TR832133               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:16.052791Z
+2022-12-02 05:00:00.000000 UTC  TR835993               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.878088Z
+2022-12-02 05:00:00.000000 UTC  TR848169               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:19.134958Z
+2022-12-02 05:00:00.000000 UTC  TR850312               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:22.011453Z
+2022-12-02 05:00:00.000000 UTC  TR853601               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.879054Z
+2022-12-02 05:00:00.000000 UTC  TR856954               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.312356Z
+2022-12-02 05:00:00.000000 UTC  TR858645               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:22.40164Z
+2022-12-02 05:00:00.000000 UTC  TR860511               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.109172Z
+2022-12-02 05:00:00.000000 UTC  TR864651               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:16.190852Z
+2022-12-02 05:00:00.000000 UTC  TR866981               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.395136Z
+2022-12-02 05:00:00.000000 UTC  TR869320               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.533512Z
+2022-12-02 05:00:00.000000 UTC  TR870136               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:23.844479Z
+2022-12-02 05:00:00.000000 UTC  TR872349               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:27.012477Z
+2022-12-02 05:00:00.000000 UTC  TR877042               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:19.90195Z
+2022-12-02 05:00:00.000000 UTC  TR877550               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.450101Z
+2022-12-02 05:00:00.000000 UTC  TR878674               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.339374Z
+2022-12-02 05:00:00.000000 UTC  TR882052               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.611521Z
+2022-12-02 05:00:00.000000 UTC  TR882393               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:24.15547Z
+2022-12-02 05:00:00.000000 UTC  TR885234               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:22.153799Z
+2022-12-02 05:00:00.000000 UTC  TR892952               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:22.510254Z
+2022-12-02 05:00:00.000000 UTC  TR896600               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:19.175972Z
+2022-12-02 05:00:00.000000 UTC  TR900595               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.425281Z
+2022-12-02 05:00:00.000000 UTC  TR904972               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:17.608694Z
+2022-12-02 05:00:00.000000 UTC  TR907031               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:14.738681Z
+2022-12-02 05:00:00.000000 UTC  TR908534               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:21.577419Z
+2022-12-02 05:00:00.000000 UTC  TR912561               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:21.427379Z
+2022-12-02 05:00:00.000000 UTC  TR918629               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.907388Z
+2022-12-02 05:00:00.000000 UTC  TR922033               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.732678Z
+2022-12-02 05:00:00.000000 UTC  TR922160               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.413876Z
+2022-12-02 05:00:00.000000 UTC  TR923478               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.777698Z
+2022-12-02 05:00:00.000000 UTC  TR927390               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:17.120113Z
+2022-12-02 05:00:00.000000 UTC  TR944604               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:20.854028Z
+2022-12-02 05:00:00.000000 UTC  TR948820               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:23.250556Z
+2022-12-02 05:00:00.000000 UTC  TR955308               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:26.497627Z
+2022-12-02 05:00:00.000000 UTC  TR955349               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:20.912523Z
+2022-12-02 05:00:00.000000 UTC  TR956917               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:21.770598Z
+2022-12-02 05:00:00.000000 UTC  TR957291               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:29.380153Z
+2022-12-02 05:00:00.000000 UTC  TR959685               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:21.892033Z
+2022-12-02 05:00:00.000000 UTC  TR967086               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:50:00Z  2025-02-19T09:51:20.848494Z
+2022-12-02 05:00:00.000000 UTC  TR982152               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:18.441255Z
+2022-12-02 05:00:00.000000 UTC  TR993595               None        LGF8pf4gkOZcABnNq9NMxNcE/U2Gc0B3trVK0hEzNp7v5Z7ONCJVcILwpbzVuqyOFxz2XIU/rjOerp6NEmjmnQ==  None           20808267725.0  None          2019-08-28T04:00:00Z  SFU              Residence         2025-02-19T09:54:00Z  2025-02-19T09:54:21.979102Z
+
+
+
+
+import apache_beam as beam
+from apache_beam.options.pipeline_options import PipelineOptions
+from apache_beam.io.gcp.pubsub import ReadFromPubSub
+import apache_beam.io.gcp.spanner as sp
+import json
+import argparse
+import logging
+from typing import NamedTuple, Iterator, Optional
+from datetime import datetime, timezone
+
+class TemplateOptions(PipelineOptions):
+    @classmethod
+    def _add_argparse_args(cls, parser):
+        parser.add_value_provider_argument('--params', type=str)
+
+class ConvertToSpannerMutation(NamedTuple):
+    telephone_number: Optional[str]
+    trouble_report_number: Optional[str]
+    address_id: Optional[str]
+    chronic_flag: Optional[str]
+    chronic_total: Optional[str]
+    circuit_id: Optional[str]
+    circuit_type: Optional[str]
+    reported_ts: Optional[str]
+    data_circuit_id: Optional[str]
+    video_circuit_id: Optional[str]
+    window_timestamp: Optional[str]
+    insertion_timestamp: Optional[str]
+beam.coders.registry.register_coder(ConvertToSpannerMutation, beam.coders.RowCoder)
+
+class DecodeAvroRecords(beam.DoFn):
+    def process(self, element, timestamp=beam.DoFn.TimestampParam) -> Iterator[dict]:
+        import avro.io as avro_io
+        import avro.schema
+        from io import BytesIO
+        import time
+
+        def reformat_input_msg_schema(msg):
+            fmt_msg = {}
+            fmt_msg['timestamp'] = msg['timestamp']
+            fmt_msg['host'] = msg['host']
+            fmt_msg['src'] = msg['src']
+            fmt_msg['ingressTimestamp'] = msg['_event_ingress_ts']
+            fmt_msg['origins'] = [msg['_event_origin']]
+            tags_len = len(msg['_event_tags'])
+            if tags_len > 0:
+                if msg['_event_tags'][0] != "" and msg['_event_tags'][0] is not None:
+                    fmt_msg['tags'] = msg['_event_tags']
+                else:
+                    fmt_msg['tags'] = ['Dummy']
+            else:
+                fmt_msg['tags'] = ['Dummy']
+            fmt_msg['route'] = 3
+            fmt_msg['fetchTimestamp'] = int(time.time() * 1000)
+            fmt_msg['rawdata'] = msg['rawdata']
+            
+            return json.loads(fmt_msg['rawdata'])
+
+        message: dict = {}
+        raw_schema = """{"namespace": "com.vz.vznet",
+                        "type": "record",
+                        "name": "VznetDefault",
+                        "doc": "Default schema for events in transit",
+                        "fields": [
+                        {"name": "timestamp", "type": "long"},
+                        {"name": "host", "type": "string"},
+                        {"name": "src",  "type": "string" },
+                        {"name": "_event_ingress_ts", "type": "long"},
+                        {"name": "_event_origin", "type": "string"},
+                        {"name": "_event_tags", "type": {"type": "array", "items": "string"}},
+                        {"name": "_event_route", "type": "string"},
+                        {"name": "_event_metrics", "type": ["null", "bytes"], "default": null},
+                        {"name": "rawdata", "type": "bytes"}
+                        ]}"""
+        try:
+            if isinstance(raw_schema, dict):
+                raw_schema = json.dumps(raw_schema)
+            schema = avro.schema.parse(raw_schema)
+            avro_reader = avro_io.DatumReader(schema)
+            logging.info(f"Processing message at pipeline timestamp: {timestamp.to_utc_datetime()}")
+            if isinstance(element, bytes):
+                avro_data = element
+            else:
+                avro_data = element.data if hasattr(element, 'data') else element
+                
+            if not isinstance(avro_data, bytes):
+                logging.error(f"Expected bytes, got {type(avro_data)}")
+                return
+                
+            avro_message = avro_io.BinaryDecoder(BytesIO(avro_data))
+            message = avro_reader.read(avro_message)
+            
+            if schema.name == 'VznetDefault':
+                message['rawdata'] = message['rawdata'].decode("utf-8")
+                message['_event_metrics'] = message['_event_metrics'].decode("utf-8") if message['_event_metrics'] is not None else None
+                
+            yield reformat_input_msg_schema(message)
+            
+        except Exception as e:
+            logging.error(f"Error processing message: {str(e)}")
+            logging.error(f"Element type: {type(element)}")
+            if hasattr(element, 'data'):
+                logging.error(f"Element.data type: {type(element.data)}")
+            return
 
 class PrepareSpannerData(beam.DoFn):
     def process(self, element, window=beam.DoFn.WindowParam) -> Iterator[ConvertToSpannerMutation]:
@@ -23,7 +326,27 @@ class PrepareSpannerData(beam.DoFn):
             logging.error(f"Error processing element: {element}")
             logging.error(f"Error details: {str(e)}")
             return
-
+    def format_date(self, value):
+        """Convert date/datetime to string format."""
+        if value is None:
+            return None
+        try:
+            if isinstance(value, str):
+                dt = datetime.strptime(value.split('.')[0], '%Y-%m-%d %H:%M:%S')
+                return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+            return value
+        except Exception as e:
+            logging.error(f"Date formatting error: {str(e)}")
+            return None
+    
+    def safe_str(self, value):
+        """Safely convert value to string."""
+        if value is None:
+            return None
+        try:
+            return str(value)
+        except Exception:
+            return None
     def transform_to_mutation(self, element: dict):
         if not isinstance(element, dict):
             logging.error(f"Expected dictionary, got {type(element)}")
@@ -52,6 +375,80 @@ class PrepareSpannerData(beam.DoFn):
             reported_ts=self.format_date(element.get('date_opened')),
             data_circuit_id=element.get('data_circuit_id'),
             video_circuit_id=self.safe_str(element.get('video_circuit_id')),
-            window_timestamp=None,  # This will be populated in the process method
-            insertion_timestamp=current_time  # Add Insertion timestamp
+            window_timestamp=None,
+            insertion_timestamp=current_time
         )
+
+class AttachArrivalTimestamp(beam.DoFn):
+    def process(self, element):
+        """Attaches the arrival timestamp to each element."""
+        arrival_timestamp = datetime.now().timestamp()
+        yield beam.window.TimestampedValue(element, arrival_timestamp)
+
+def run(known_args, beam_args):
+    options = {
+        'project': known_args.project,
+        'runner': known_args.runner,
+        'region': known_args.region,
+        'staging_location': known_args.staging_location,
+        'temp_location': known_args.temp_location,
+        'template_location': known_args.template_location,
+        'save_main_session': True,
+        'streaming': True,
+        'sdk_container_image': known_args.sdk_container_image,
+        'sdk_location': 'container'
+    }
+    
+    pipeline_options = PipelineOptions.from_dictionary(options)
+    
+    with beam.Pipeline(options=pipeline_options) as p:
+        data = (p 
+            | "Read From Pubsub" >> ReadFromPubSub(
+                subscription=f"{known_args.pubsub_subscription_name}",
+                with_attributes=True
+            )
+            | "Attach Arrival Timestamp" >> beam.ParDo(AttachArrivalTimestamp()) # Attach timestamp when reading
+            | "Decode Avro" >> beam.ParDo(DecodeAvroRecords()) # Decode Avro Records
+            | "Window Into Fixed Intervals" >> beam.WindowInto(
+                beam.window.FixedWindows(2 * 60),  # 2-minute windows
+                trigger=beam.trigger.AfterWatermark(),
+                allowed_lateness=beam.window.Duration(seconds=300),
+                accumulation_mode=beam.trigger.AccumulationMode.DISCARDING
+            )
+            | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
+        )
+
+        _ = (data
+            | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
+                instance_id=known_args.spanner_instance,
+                database_id=known_args.spanner_dataset,
+                project_id=known_args.spanner_project,
+                table=known_args.spanner_table,
+                expansion_service=known_args.expansion_service,
+                max_number_mutations=7000,
+                high_priority=True
+            )
+        )
+
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--project', required=True, help='GCP Project ID')
+    parser.add_argument('--runner', default="DataflowRunner", help='Pipeline runner')
+    parser.add_argument('--region', default="us-east4", help='GCP project region')
+    parser.add_argument('--staging_location', required=True, help='Staging GCS bucket path')
+    parser.add_argument('--temp_location', required=True, help='Temp GCS bucket path')
+    parser.add_argument('--template_location', required=True, help='GCS bucket path to save template')
+    parser.add_argument('--pubsub_subscription_name', required=True, help='Input Subscription')
+    parser.add_argument('--sdk_container_image', default='us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/wireline:1.0.0', help='sdk_container_image location')
+    parser.add_argument('--spanner_dataset', required=True, help='spanner dataset')
+    parser.add_argument('--spanner_instance', required=True, help='spanner instance')
+    parser.add_argument('--spanner_project', required=True, help='spanner project')
+    parser.add_argument('--spanner_table', required=True, help='spanner table')
+    parser.add_argument('--expansion_service', default='localhost:50768', help='Expansion service host:port')
+    return parser.parse_known_args()
+
+if __name__ == '__main__':
+    logging.getLogger().setLevel(logging.INFO)
+    known_args, beam_args = parse_arguments()
+    run(known_args, beam_args)
+    print(f'Created template at {known_args.template_location}.')
