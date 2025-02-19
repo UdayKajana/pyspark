@@ -48,7 +48,7 @@ class AttachArrivalTimestamp(beam.DoFn):
         
         # Use the arrival timestamp for windowing
         yield beam.window.TimestampedValue(timestamped_element, arrival_timestamp)
-        
+
 class DecodeAvroRecords(beam.DoFn):
     def process(self, element, timestamp=beam.DoFn.TimestampParam) -> Iterator[dict]:
         import avro.io as avro_io
@@ -208,10 +208,7 @@ def run(known_args, beam_args):
             | "Attach Arrival Timestamp" >> beam.ParDo(AttachArrivalTimestamp())
             | "Window Into Fixed Intervals" >> beam.WindowInto(
                 beam.window.FixedWindows(120),  # 2 minutes window
-                trigger=AfterWatermark(
-                    early=AfterProcessingTime(120),  # Fire early trigger after 120 seconds
-                    late=beam.trigger.AfterCount(1)
-                ),
+                trigger=AfterWatermark(),
                 allowed_lateness=beam.transforms.window.Duration(seconds=300),
                 accumulation_mode=AccumulationMode.ACCUMULATING
             )
