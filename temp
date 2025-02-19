@@ -7,7 +7,9 @@ import argparse
 import logging
 from typing import NamedTuple, Iterator, Optional
 from datetime import datetime, timezone
-from apache_beam.transforms.trigger import AfterWatermark, AfterProcessingTime, AccumulationMode
+from apache_beam.transforms.trigger import AfterWatermark, AfterProcessingTime, AccumulationMode, AfterCount,  OrFinally
+import time  # Import the time module
+
 class TemplateOptions(PipelineOptions):
     @classmethod
     def _add_argparse_args(cls, parser):
@@ -29,32 +31,13 @@ class ConvertToSpannerMutation(NamedTuple):
 
 beam.coders.registry.register_coder(ConvertToSpannerMutation, beam.coders.RowCoder)
 
-class AttachArrivalTimestamp(beam.DoFn):
-    def process(self, element):
-        # Create timestamp in seconds with UTC timezone
-        arrival_timestamp = datetime.now(timezone.utc).timestamp()
-        
-        if isinstance(element, beam.io.gcp.pubsub.PubsubMessage):
-            timestamped_element = {
-                'data': element.data,
-                'attributes': element.attributes,
-                'arrival_ts': arrival_timestamp
-            }
-        else:
-            timestamped_element = {
-                'data': element,
-                'arrival_ts': arrival_timestamp
-            }
-        
-        # Use the arrival timestamp for windowing
-        yield beam.window.TimestampedValue(timestamped_element, arrival_timestamp)
+# Remove AttachArrivalTimestamp class
 
 class DecodeAvroRecords(beam.DoFn):
     def process(self, element, timestamp=beam.DoFn.TimestampParam) -> Iterator[dict]:
         import avro.io as avro_io
         import avro.schema
         from io import BytesIO
-        import time
 
         def reformat_input_msg_schema(msg):
             fmt_msg = {}
@@ -92,26 +75,28 @@ class DecodeAvroRecords(beam.DoFn):
                         {"name": "rawdata", "type": "bytes"}
                         ]}"""
         try:
-            # Extract the actual data from the timestamped element
+            # Extract the actual data from the element
             avro_data = element['data'] if isinstance(element, dict) and 'data' in element else element
-            
             schema = avro.schema.parse(raw_schema)
             avro_reader = avro_io.DatumReader(schema)
-            
             if isinstance(avro_data, bytes):
                 avro_message = avro_io.BinaryDecoder(BytesIO(avro_data))
                 message = avro_reader.read(avro_message)
-                
                 if schema.name == 'VznetDefault':
                     message['rawdata'] = message['rawdata'].decode("utf-8")
                     message['_event_metrics'] = message['_event_metrics'].decode("utf-8") if message['_event_metrics'] is not None else None
-                    
-                # Add arrival timestamp to the decoded message
+                # Reformat the message
                 decoded_message = reformat_input_msg_schema(message)
-                decoded_message['arrival_timestamp'] = element.get('arrival_ts')
-                
-                yield decoded_message
-                
+                # Extract event timestamp from decoded_message (assuming it's named 'event_time')
+                #  and convert to seconds if it's in milliseconds
+                event_time_ms = decoded_message.get('timestamp')  # Assuming 'timestamp' contains event time in milliseconds
+                if event_time_ms is not None:
+                    event_time = float(event_time_ms) / 1000.0  # Convert to seconds
+                else:
+                    event_time = time.time()  # Use the current time if the event time is unavailable
+
+                # Yield TimestampedValue
+                yield beam.window.TimestampedValue(decoded_message, event_time)
         except Exception as e:
             logging.error(f"Error processing message: {str(e)}")
             logging.error(f"Element type: {type(element)}")
@@ -141,7 +126,7 @@ class PrepareSpannerData(beam.DoFn):
         except Exception as e:
             logging.error(f"Date formatting error: {str(e)}")
             return None
-    
+
     def safe_str(self, value):
         if value is None:
             return None
@@ -154,7 +139,6 @@ class PrepareSpannerData(beam.DoFn):
         if not isinstance(element, dict):
             logging.error(f"Expected dictionary, got {type(element)}")
             return None
-            
         if 'rawdata' in element:
             try:
                 if isinstance(element['rawdata'], str):
@@ -166,7 +150,6 @@ class PrepareSpannerData(beam.DoFn):
                 return None
 
         current_time = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-
         return ConvertToSpannerMutation(
             telephone_number=element.get('telephone_number'),
             trouble_report_number=element.get('trouble_report_num'),
@@ -195,25 +178,27 @@ def run(known_args, beam_args):
         'sdk_container_image': known_args.sdk_container_image,
         'sdk_location': 'container'
     }
-    
+
     pipeline_options = PipelineOptions.from_dictionary(options)
-    
+
     with beam.Pipeline(options=pipeline_options) as p:
-        data = (p 
+        data = (p
             | "Read From Pubsub" >> ReadFromPubSub(
                 subscription=f"{known_args.pubsub_subscription_name}",
                 with_attributes=True,
                 timestamp_attribute=None  # Disable PubSub timestamp to use our custom timestamp
             )
-            | "Attach Arrival Timestamp" >> beam.ParDo(AttachArrivalTimestamp())
+            #| "Attach Arrival Timestamp" >> beam.ParDo(AttachArrivalTimestamp())  # Removed
+            | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
             | "Window Into Fixed Intervals" >> beam.WindowInto(
                 beam.window.FixedWindows(120),  # 2 minutes window
-                trigger=AfterWatermark(),
+                trigger=OrFinally(AfterProcessingTime.after_first(120), AfterCount(100)), # Fire after 2 minutes or 100 records
                 allowed_lateness=beam.transforms.window.Duration(seconds=300),
                 accumulation_mode=AccumulationMode.ACCUMULATING
             )
-            | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
             | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
+            | 'Group Into Batches' >> beam.GroupByKey()
+            | 'Ungroup' >> beam.FlatMap(lambda x: x[1]) # Flatten
         )
 
         _ = (data
@@ -250,3 +235,4 @@ if __name__ == '__main__':
     known_args, beam_args = parse_arguments()
     run(known_args, beam_args)
     print(f'Created template at {known_args.template_location}.')
+
