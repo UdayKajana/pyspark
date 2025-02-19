@@ -104,9 +104,17 @@ class DecodeAvroRecords(beam.DoFn):
             return
 
 class PrepareSpannerData(beam.DoFn):
-    def process(self, element) -> Iterator[ConvertToSpannerMutation]:
+    def process(self, element, window=beam.DoFn.WindowParam) -> Iterator[ConvertToSpannerMutation]:
         try:
-            yield self.transform_to_mutation(element)
+            # Access window information to generate a window timestamp
+            window_start = window.start.to_utc_datetime().isoformat()
+            
+            # Transform the element and add window_timestamp
+            mutation = self.transform_to_mutation(element)
+            
+            # If transformation was successful, add window timestamp and yield
+            if mutation:
+                yield mutation._replace(window_timestamp=window_start) # Add window timestamp
         except Exception as e:
             logging.error(f"Error processing element: {element}")
             logging.error(f"Error details: {str(e)}")
@@ -146,7 +154,7 @@ class PrepareSpannerData(beam.DoFn):
             except json.JSONDecodeError as e:
                 logging.error(f"Error decoding rawdata: {str(e)}")
                 return None
-            
+
         return ConvertToSpannerMutation(
             telephone_number=element.get('telephone_number'),
             trouble_report_number=element.get('trouble_report_num'),
@@ -157,8 +165,17 @@ class PrepareSpannerData(beam.DoFn):
             circuit_type=element.get('port_associated_service'),
             reported_ts=self.format_date(element.get('date_opened')),
             data_circuit_id=element.get('data_circuit_id'),
-            video_circuit_id=self.safe_str(element.get('video_circuit_id'))
+            video_circuit_id=self.safe_str(element.get('video_circuit_id')),
+            window_timestamp=None, # This will be populated in the process method
+            insertion_timestamp=datetime.utcnow().isoformat() # Add Insertion timestamp
         )
+
+class AttachArrivalTimestamp(beam.DoFn):
+    def process(self, element):
+        """Attaches the arrival timestamp to each element."""
+        arrival_timestamp = datetime.utcnow().timestamp()  # Get current timestamp in seconds
+        yield beam.window.TimestampedValue(element, arrival_timestamp)
+
 
 def run(known_args, beam_args):
     options = {
@@ -182,13 +199,14 @@ def run(known_args, beam_args):
                 subscription=f"{known_args.pubsub_subscription_name}",
                 with_attributes=True
             )
+            | "Attach Arrival Timestamp" >> beam.ParDo(AttachArrivalTimestamp()) # Attach timestamp when reading
+            | "Decode Avro" >> beam.ParDo(DecodeAvroRecords()) # Decode Avro Records
             | "Window Into Fixed Intervals" >> beam.WindowInto(
                 beam.window.FixedWindows(2 * 60),  # 2-minute windows
                 trigger=beam.trigger.AfterWatermark(),
                 allowed_lateness=beam.window.Duration(seconds=300),
                 accumulation_mode=beam.trigger.AccumulationMode.DISCARDING
             )
-            | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
             | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
         )
 
