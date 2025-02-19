@@ -1,116 +1,16 @@
-import apache_beam as beam
-from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.io.gcp.pubsub import ReadFromPubSub
-import apache_beam.io.gcp.spanner as sp
-import json
-import argparse
-import logging
-from typing import NamedTuple, Iterator, Optional
-from datetime import datetime, timezone
-
-class TemplateOptions(PipelineOptions):
-    @classmethod
-    def _add_argparse_args(cls, parser):
-        parser.add_value_provider_argument('--params', type=str)
-
-class ConvertToSpannerMutation(NamedTuple):
-    telephone_number: Optional[str]
-    trouble_report_number: Optional[str]
-    address_id: Optional[str]
-    chronic_flag: Optional[str]
-    chronic_total: Optional[str]
-    circuit_id: Optional[str]
-    circuit_type: Optional[str]
-    reported_ts: Optional[str]
-    data_circuit_id: Optional[str]
-    video_circuit_id: Optional[str]
-    window_timestamp: Optional[str]
-    insertion_timestamp: Optional[str]
-beam.coders.registry.register_coder(ConvertToSpannerMutation, beam.coders.RowCoder)
-
-class DecodeAvroRecords(beam.DoFn):
-    def process(self, element, timestamp=beam.DoFn.TimestampParam) -> Iterator[dict]:
-        import avro.io as avro_io
-        import avro.schema
-        from io import BytesIO
-        import time
-
-        def reformat_input_msg_schema(msg):
-            fmt_msg = {}
-            fmt_msg['timestamp'] = msg['timestamp']
-            fmt_msg['host'] = msg['host']
-            fmt_msg['src'] = msg['src']
-            fmt_msg['ingressTimestamp'] = msg['_event_ingress_ts']
-            fmt_msg['origins'] = [msg['_event_origin']]
-            tags_len = len(msg['_event_tags'])
-            if tags_len > 0:
-                if msg['_event_tags'][0] != "" and msg['_event_tags'][0] is not None:
-                    fmt_msg['tags'] = msg['_event_tags']
-                else:
-                    fmt_msg['tags'] = ['Dummy']
-            else:
-                fmt_msg['tags'] = ['Dummy']
-            fmt_msg['route'] = 3
-            fmt_msg['fetchTimestamp'] = int(time.time() * 1000)
-            fmt_msg['rawdata'] = msg['rawdata']
-            
-            return json.loads(fmt_msg['rawdata'])
-
-        message: dict = {}
-        raw_schema = """{"namespace": "com.vz.vznet",
-                        "type": "record",
-                        "name": "VznetDefault",
-                        "doc": "Default schema for events in transit",
-                        "fields": [
-                        {"name": "timestamp", "type": "long"},
-                        {"name": "host", "type": "string"},
-                        {"name": "src",  "type": "string" },
-                        {"name": "_event_ingress_ts", "type": "long"},
-                        {"name": "_event_origin", "type": "string"},
-                        {"name": "_event_tags", "type": {"type": "array", "items": "string"}},
-                        {"name": "_event_route", "type": "string"},
-                        {"name": "_event_metrics", "type": ["null", "bytes"], "default": null},
-                        {"name": "rawdata", "type": "bytes"}
-                        ]}"""
-        try:
-            if isinstance(raw_schema, dict):
-                raw_schema = json.dumps(raw_schema)
-            schema = avro.schema.parse(raw_schema)
-            avro_reader = avro_io.DatumReader(schema)
-            logging.info(f"Processing message at pipeline timestamp: {timestamp.to_utc_datetime()}")
-            if isinstance(element, bytes):
-                avro_data = element
-            else:
-                avro_data = element.data if hasattr(element, 'data') else element
-                
-            if not isinstance(avro_data, bytes):
-                logging.error(f"Expected bytes, got {type(avro_data)}")
-                return
-                
-            avro_message = avro_io.BinaryDecoder(BytesIO(avro_data))
-            message = avro_reader.read(avro_message)
-            
-            if schema.name == 'VznetDefault':
-                message['rawdata'] = message['rawdata'].decode("utf-8")
-                message['_event_metrics'] = message['_event_metrics'].decode("utf-8") if message['_event_metrics'] is not None else None
-                
-            yield reformat_input_msg_schema(message)
-            
-        except Exception as e:
-            logging.error(f"Error processing message: {str(e)}")
-            logging.error(f"Element type: {type(element)}")
-            if hasattr(element, 'data'):
-                logging.error(f"Element.data type: {type(element.data)}")
-            return
+class AttachArrivalTimestamp(beam.DoFn):
+    def process(self, element):
+        """Attaches the arrival timestamp to each element."""
+        arrival_timestamp = datetime.now().timestamp()  # Get current timestamp in seconds
+        yield beam.window.TimestampedValue(element, arrival_timestamp)
 
 class PrepareSpannerData(beam.DoFn):
     def process(self, element, window=beam.DoFn.WindowParam) -> Iterator[ConvertToSpannerMutation]:
         try:
             # Access window information to generate a window timestamp
-            # Ensure the datetime object is timezone-aware
-            window_start_utc = window.start.to_utc_datetime().replace(tzinfo=timezone.utc)
+            window_start_utc = window.start.to_utc_datetime()
             
-            # Format it as a string Spanner expects, including UTC timezone
+            # Format it as a string Spanner expects
             window_start_str = window_start_utc.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
             # Transform the element and add window_timestamp
@@ -118,31 +18,11 @@ class PrepareSpannerData(beam.DoFn):
             
             # If transformation was successful, add window timestamp and yield
             if mutation:
-                yield mutation._replace(window_timestamp=window_start_str) # Add window timestamp
+                yield mutation._replace(window_timestamp=window_start_str)
         except Exception as e:
             logging.error(f"Error processing element: {element}")
             logging.error(f"Error details: {str(e)}")
             return
-
-    def format_date(self, value):
-        if value is None:
-            return None
-        try:
-            if isinstance(value, str):
-                dt = datetime.strptime(value.split('.')[0], '%Y-%m-%d %H:%M:%S')
-                return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-            return value
-        except Exception as e:
-            logging.error(f"Date formatting error: {str(e)}")
-            return None
-    
-    def safe_str(self, value):
-        if value is None:
-            return None
-        try:
-            return str(value)
-        except Exception:
-            return None
 
     def transform_to_mutation(self, element: dict):
         if not isinstance(element, dict):
@@ -159,6 +39,8 @@ class PrepareSpannerData(beam.DoFn):
                 logging.error(f"Error decoding rawdata: {str(e)}")
                 return None
 
+        current_time = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
         return ConvertToSpannerMutation(
             telephone_number=element.get('telephone_number'),
             trouble_report_number=element.get('trouble_report_num'),
@@ -170,145 +52,6 @@ class PrepareSpannerData(beam.DoFn):
             reported_ts=self.format_date(element.get('date_opened')),
             data_circuit_id=element.get('data_circuit_id'),
             video_circuit_id=self.safe_str(element.get('video_circuit_id')),
-            window_timestamp=None, # This will be populated in the process method
-            insertion_timestamp=datetime.now(datetime.timezone.utc).isoformat() # Add Insertion timestamp
+            window_timestamp=None,  # This will be populated in the process method
+            insertion_timestamp=current_time  # Add Insertion timestamp
         )
-
-class AttachArrivalTimestamp(beam.DoFn):
-    def process(self, element):
-        """Attaches the arrival timestamp to each element."""
-        arrival_timestamp = datetime.now(datetime.timezone.utc).timestamp()  # Get current timestamp in seconds
-        yield beam.window.TimestampedValue(element, arrival_timestamp)
-
-
-def run(known_args, beam_args):
-    options = {
-        'project': known_args.project,
-        'runner': known_args.runner,
-        'region': known_args.region,
-        'staging_location': known_args.staging_location,
-        'temp_location': known_args.temp_location,
-        'template_location': known_args.template_location,
-        'save_main_session': True,
-        'streaming': True,
-        'sdk_container_image': known_args.sdk_container_image,
-        'sdk_location': 'container'
-    }
-    
-    pipeline_options = PipelineOptions.from_dictionary(options)
-    
-    with beam.Pipeline(options=pipeline_options) as p:
-        data = (p 
-            | "Read From Pubsub" >> ReadFromPubSub(
-                subscription=f"{known_args.pubsub_subscription_name}",
-                with_attributes=True
-            )
-            | "Attach Arrival Timestamp" >> beam.ParDo(AttachArrivalTimestamp()) # Attach timestamp when reading
-            | "Decode Avro" >> beam.ParDo(DecodeAvroRecords()) # Decode Avro Records
-            | "Window Into Fixed Intervals" >> beam.WindowInto(
-                beam.window.FixedWindows(2 * 60),  # 2-minute windows
-                trigger=beam.trigger.AfterWatermark(),
-                allowed_lateness=beam.window.Duration(seconds=300),
-                accumulation_mode=beam.trigger.AccumulationMode.DISCARDING
-            )
-            | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
-        )
-
-        _ = (data
-            | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
-                instance_id=known_args.spanner_instance,
-                database_id=known_args.spanner_dataset,
-                project_id=known_args.spanner_project,
-                table=known_args.spanner_table,
-                expansion_service=known_args.expansion_service,
-                max_number_mutations=7000,
-                high_priority=True
-            )
-        )
-
-def parse_arguments():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--project', required=True, help='GCP Project ID')
-    parser.add_argument('--runner', default="DataflowRunner", help='Pipeline runner')
-    parser.add_argument('--region', default="us-east4", help='GCP project region')
-    parser.add_argument('--staging_location', required=True, help='Staging GCS bucket path')
-    parser.add_argument('--temp_location', required=True, help='Temp GCS bucket path')
-    parser.add_argument('--template_location', required=True, help='GCS bucket path to save template')
-    parser.add_argument('--pubsub_subscription_name', required=True, help='Input Subscription')
-    parser.add_argument('--sdk_container_image', default='us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/wireline:1.0.0', help='sdk_container_image location')
-    parser.add_argument('--spanner_dataset', required=True, help='spanner dataset')
-    parser.add_argument('--spanner_instance', required=True, help='spanner instance')
-    parser.add_argument('--spanner_project', required=True, help='spanner project')
-    parser.add_argument('--spanner_table', required=True, help='spanner table')
-    parser.add_argument('--expansion_service', default='localhost:50768', help='Expansion service host:port')
-    return parser.parse_known_args()
-
-if __name__ == '__main__':
-    logging.getLogger().setLevel(logging.INFO)
-    known_args, beam_args = parse_arguments()
-    run(known_args, beam_args)
-    print(f'Created template at {known_args.template_location}.')
-
-
-
-Error message from worker: generic::unknown: Traceback (most recent call last):
-  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
-  File "apache_beam/runners/common.py", line 1677, in apache_beam.runners.common._OutputHandler.handle_process_outputs
-  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 180, in process
-AttributeError: type object 'datetime.datetime' has no attribute 'timezone'
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 311, in _execute
-    response = task()
-  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 386, in <lambda>
-    lambda: self.create_worker().do_instruction(request), request)
-  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 656, in do_instruction
-    return getattr(self, request_type)(
-  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 694, in process_bundle
-    bundle_processor.process_bundle(instruction_id))
-  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/bundle_processor.py", line 1119, in process_bundle
-    input_op_by_transform_id[element.transform_id].process_encoded(
-  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/bundle_processor.py", line 237, in process_encoded
-    self.output(decoded_value)
-  File "apache_beam/runners/worker/operations.py", line 567, in apache_beam.runners.worker.operations.Operation.output
-  File "apache_beam/runners/worker/operations.py", line 569, in apache_beam.runners.worker.operations.Operation.output
-  File "apache_beam/runners/worker/operations.py", line 260, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
-  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
-  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 1592, in apache_beam.runners.common.DoFnRunner._reraise_augmented
-  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
-  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
-  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
-  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
-  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 1592, in apache_beam.runners.common.DoFnRunner._reraise_augmented
-  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
-  File "apache_beam/runners/common.py", line 1687, in apache_beam.runners.common._OutputHandler.handle_process_outputs
-  File "apache_beam/runners/common.py", line 1800, in apache_beam.runners.common._OutputHandler._write_value_to_tag
-  File "apache_beam/runners/worker/operations.py", line 263, in apache_beam.runners.worker.operations.SingletonElementConsumerSet.receive
-  File "apache_beam/runners/worker/operations.py", line 950, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/worker/operations.py", line 951, in apache_beam.runners.worker.operations.DoOperation.process
-  File "apache_beam/runners/common.py", line 1503, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 1613, in apache_beam.runners.common.DoFnRunner._reraise_augmented
-  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
-  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
-  File "apache_beam/runners/common.py", line 1677, in apache_beam.runners.common._OutputHandler.handle_process_outputs
-  File "/home/udayka/python/vrepair_ticket_opened_norm_v0.py", line 180, in process
-AttributeError: type object 'datetime.datetime' has no attribute 'timezone' [while running 'Attach Arrival Timestamp-ptransform-49']
-
-passed through:
-==>
-    dist_proc/dax/workflow/worker/fnapi_service_impl.cc:1316
-{
-errorGroups: [1]
-httpRequest: null
-insertId: "citargbgl"
