@@ -30,7 +30,6 @@ class ConvertToSpannerMutation(NamedTuple):
 beam.coders.registry.register_coder(ConvertToSpannerMutation, beam.coders.RowCoder)
 
 class DecodeAvroRecords(beam.DoFn):
-    # ... [previous DecodeAvroRecords implementation remains the same]
     def process(self, element) -> Iterator[dict]:
         import avro.io as avro_io
         import avro.schema
@@ -94,7 +93,6 @@ class DecodeAvroRecords(beam.DoFn):
             return
 
 class PrepareSpannerData(beam.DoFn):
-    # ... [previous PrepareSpannerData implementation remains the same]
     def process(self, element) -> Iterator[ConvertToSpannerMutation]:
         try:
             yield self.transform_to_mutation(element)
@@ -172,9 +170,7 @@ def run(known_args, beam_args):
             | "Read From Pubsub" >> ReadFromPubSub(subscription=f"{known_args.pubsub_subscription_name}")
             | "Fixed Window" >> beam.WindowInto(
                 window.FixedWindows(120),  # 2-minute fixed window
-                trigger=trigger.Repeatedly(
-                    trigger.AfterProcessingTime(delay=120)  # 2-minute delay
-                ),
+                trigger=trigger.AfterProcessingTime(delay=120),  # Trigger after 2 minutes of processing time
                 accumulation_mode=trigger.AccumulationMode.DISCARDING
             )
             | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
@@ -192,7 +188,6 @@ def run(known_args, beam_args):
         )
 
 def parse_arguments():
-    # ... [previous parse_arguments implementation remains the same]
     parser = argparse.ArgumentParser()
     parser.add_argument('--project', required=True, help='GCP Project ID')
     parser.add_argument('--runner', default="DataflowRunner", help='Pipeline runner')
