@@ -7,12 +7,12 @@ import argparse
 import logging
 from typing import NamedTuple, Iterator, Optional
 from datetime import datetime
-
+ 
 class TemplateOptions(PipelineOptions):
     @classmethod
     def _add_argparse_args(cls, parser):
         parser.add_value_provider_argument('--params', type=str)
-
+ 
 class ConvertToSpannerMutation(NamedTuple):
     telephone_number: Optional[str]
     trouble_report_number: Optional[str]
@@ -24,16 +24,16 @@ class ConvertToSpannerMutation(NamedTuple):
     reported_ts: Optional[str]
     data_circuit_id: Optional[str]
     video_circuit_id: Optional[str]
-
+ 
 beam.coders.registry.register_coder(ConvertToSpannerMutation, beam.coders.RowCoder)
-
+ 
 class DecodeAvroRecords(beam.DoFn):
     def process(self, element) -> Iterator[dict]:
         import avro.io as avro_io
         import avro.schema
         from io import BytesIO
         import time
-
+ 
         def reformat_input_msg_schema(msg):
             fmt_msg = {}
             fmt_msg['timestamp'] = msg['timestamp']
@@ -54,7 +54,7 @@ class DecodeAvroRecords(beam.DoFn):
             fmt_msg['rawdata'] = msg['rawdata']
             
             return json.loads(fmt_msg['rawdata'])
-
+ 
         message: dict = {}
         raw_schema = """{"namespace": "com.vz.vznet",
                         "type": "record",
@@ -89,7 +89,7 @@ class DecodeAvroRecords(beam.DoFn):
         except Exception as e:
             logging.error(f"Error processing message: {str(e)}")
             return
-
+ 
 class PrepareSpannerData(beam.DoFn):
     def process(self, element) -> Iterator[ConvertToSpannerMutation]:
         try:
@@ -120,7 +120,7 @@ class PrepareSpannerData(beam.DoFn):
             return str(value)
         except Exception:
             return None
-
+ 
     def transform_to_mutation(self, element: dict):
         if not isinstance(element, dict):
             logging.error(f"Expected dictionary, got {type(element)}")
@@ -162,7 +162,7 @@ def run(known_args, beam_args):
         'sdk_container_image': known_args.sdk_container_image,
         'sdk_location': 'container'
     }
-
+ 
     pipeline_options = PipelineOptions.from_dictionary(options)
     
     with beam.Pipeline(options=pipeline_options) as p:
@@ -170,7 +170,7 @@ def run(known_args, beam_args):
             | "Read From Pubsub" >> ReadFromPubSub(subscription=f"{known_args.pubsub_subscription_name}")
             | "Fixed Window" >> beam.WindowInto(
                                 beam.window.FixedWindows(120),
-                                trigger=beam.trigger.AfterProcessingTime(120),
+                                trigger=beam.trigger.AfterAll(),  # Change the trigger
                                 accumulation_mode=beam.trigger.AccumulationMode.DISCARDING)
             | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
         )
@@ -184,7 +184,7 @@ def run(known_args, beam_args):
                 expansion_service=known_args.expansion_service
             )
         )
-
+ 
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--project', required=True, help='GCP Project ID')
@@ -201,9 +201,10 @@ def parse_arguments():
     parser.add_argument('--spanner_table', required=True, help='spanner table')
     parser.add_argument('--expansion_service', default='localhost:50768', help='Expansion service host:port')
     return parser.parse_known_args()
-
+ 
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
     known_args, beam_args = parse_arguments()
     run(known_args, beam_args)
     print(f'Created template at {known_args.template_location}.')
+
