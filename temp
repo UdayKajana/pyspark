@@ -7,12 +7,14 @@ import argparse
 import logging
 from typing import NamedTuple, Iterator, Optional
 from datetime import datetime
- 
+from apache_beam.transforms import window
+from apache_beam import trigger
+
 class TemplateOptions(PipelineOptions):
     @classmethod
     def _add_argparse_args(cls, parser):
         parser.add_value_provider_argument('--params', type=str)
- 
+
 class ConvertToSpannerMutation(NamedTuple):
     telephone_number: Optional[str]
     trouble_report_number: Optional[str]
@@ -24,16 +26,17 @@ class ConvertToSpannerMutation(NamedTuple):
     reported_ts: Optional[str]
     data_circuit_id: Optional[str]
     video_circuit_id: Optional[str]
- 
+
 beam.coders.registry.register_coder(ConvertToSpannerMutation, beam.coders.RowCoder)
- 
+
 class DecodeAvroRecords(beam.DoFn):
+    # ... [previous DecodeAvroRecords implementation remains the same]
     def process(self, element) -> Iterator[dict]:
         import avro.io as avro_io
         import avro.schema
         from io import BytesIO
         import time
- 
+
         def reformat_input_msg_schema(msg):
             fmt_msg = {}
             fmt_msg['timestamp'] = msg['timestamp']
@@ -54,7 +57,7 @@ class DecodeAvroRecords(beam.DoFn):
             fmt_msg['rawdata'] = msg['rawdata']
             
             return json.loads(fmt_msg['rawdata'])
- 
+
         message: dict = {}
         raw_schema = """{"namespace": "com.vz.vznet",
                         "type": "record",
@@ -89,8 +92,9 @@ class DecodeAvroRecords(beam.DoFn):
         except Exception as e:
             logging.error(f"Error processing message: {str(e)}")
             return
- 
+
 class PrepareSpannerData(beam.DoFn):
+    # ... [previous PrepareSpannerData implementation remains the same]
     def process(self, element) -> Iterator[ConvertToSpannerMutation]:
         try:
             yield self.transform_to_mutation(element)
@@ -98,13 +102,12 @@ class PrepareSpannerData(beam.DoFn):
             logging.error(f"Error processing element: {element}")
             logging.error(f"Error details: {str(e)}")
             return
+
     def format_date(self, value):
-        """Convert date/datetime to string format."""
         if value is None:
             return None
         try:
             if isinstance(value, str):
-                # Remove microseconds if present
                 dt = datetime.strptime(value.split('.')[0], '%Y-%m-%d %H:%M:%S')
                 return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
             return value
@@ -113,20 +116,18 @@ class PrepareSpannerData(beam.DoFn):
             return None
     
     def safe_str(self, value):
-        """Safely convert value to string."""
         if value is None:
             return None
         try:
             return str(value)
         except Exception:
             return None
- 
+
     def transform_to_mutation(self, element: dict):
         if not isinstance(element, dict):
             logging.error(f"Expected dictionary, got {type(element)}")
             return None
             
-        # Extract nested rawdata if present
         if 'rawdata' in element:
             try:
                 if isinstance(element['rawdata'], str):
@@ -149,6 +150,7 @@ class PrepareSpannerData(beam.DoFn):
             data_circuit_id=element.get('data_circuit_id'),
             video_circuit_id=self.safe_str(element.get('video_circuit_id'))
         )
+
 def run(known_args, beam_args):
     options = {
         'project': known_args.project,
@@ -162,18 +164,22 @@ def run(known_args, beam_args):
         'sdk_container_image': known_args.sdk_container_image,
         'sdk_location': 'container'
     }
- 
+
     pipeline_options = PipelineOptions.from_dictionary(options)
     
     with beam.Pipeline(options=pipeline_options) as p:
         data = (p 
             | "Read From Pubsub" >> ReadFromPubSub(subscription=f"{known_args.pubsub_subscription_name}")
             | "Fixed Window" >> beam.WindowInto(
-                                beam.window.FixedWindows(120),
-                                trigger=beam.trigger.AfterProcessingTime(120), #Reverted back to AfterProcessingTime
-                                accumulation_mode=beam.trigger.AccumulationMode.DISCARDING)
+                window.FixedWindows(120),  # 2-minute fixed window
+                trigger=trigger.Repeatedly(
+                    trigger.AfterProcessingTime(delay=120)  # 2-minute delay
+                ),
+                accumulation_mode=trigger.AccumulationMode.DISCARDING
+            )
             | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
         )
+        
         _ = (data
             | 'Prepare Spanner Data' >> beam.ParDo(PrepareSpannerData())
             | "Write To Spanner" >> sp.SpannerInsertOrUpdate(
@@ -184,8 +190,9 @@ def run(known_args, beam_args):
                 expansion_service=known_args.expansion_service
             )
         )
- 
+
 def parse_arguments():
+    # ... [previous parse_arguments implementation remains the same]
     parser = argparse.ArgumentParser()
     parser.add_argument('--project', required=True, help='GCP Project ID')
     parser.add_argument('--runner', default="DataflowRunner", help='Pipeline runner')
@@ -194,17 +201,16 @@ def parse_arguments():
     parser.add_argument('--temp_location', required=True, help='Temp GCS bucket path')
     parser.add_argument('--template_location', required=True, help='GCS bucket path to save template')
     parser.add_argument('--pubsub_subscription_name', required=True, help='Input Subscription')
-    parser.add_argument('--sdk_container_image', default='us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/py39beam26:1.0.0', help='sdk_container_image location')
+    parser.add_argument('--sdk_container_image', default='us-east4-docker.pkg.dev/vz-it-np-gudv-dev-vzntdo-0/vznet/wireline:1.0.0', help='sdk_container_image location')
     parser.add_argument('--spanner_dataset', required=True, help='spanner dataset')
     parser.add_argument('--spanner_instance', required=True, help='spanner instance')
     parser.add_argument('--spanner_project', required=True, help='spanner project')
     parser.add_argument('--spanner_table', required=True, help='spanner table')
     parser.add_argument('--expansion_service', default='localhost:50768', help='Expansion service host:port')
     return parser.parse_known_args()
- 
+
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
     known_args, beam_args = parse_arguments()
     run(known_args, beam_args)
     print(f'Created template at {known_args.template_location}.')
-
