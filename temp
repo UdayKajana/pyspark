@@ -166,10 +166,9 @@ def run(known_args, beam_args):
     pipeline_options = PipelineOptions.from_dictionary(options)
     
     with beam.Pipeline(options=pipeline_options) as p:
-        # Read from PubSub and decode Avro
         data = (p 
-            | "Read From Pubsub" >> ReadFromPubSub(
-                subscription=f"{known_args.pubsub_subscription_name}")
+            | "Read From Pubsub" >> ReadFromPubSub(subscription=f"{known_args.pubsub_subscription_name}")
+            | "FIxed Window" >> beam.WindowInto(beam.window.FixedWindows(120))
             | "Decode Avro" >> beam.ParDo(DecodeAvroRecords())
         )
         _ = (data
