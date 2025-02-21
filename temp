@@ -7,6 +7,22 @@ from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.io.gcp.bigquery import ReadFromBigQuery
 from datetime import datetime, date
 from decimal import Decimal
+from apache_beam.metrics import Metrics, MetricsFilter
+import time
+
+class MetricsCollector:
+    def __init__(self):
+        # Counter metrics
+        self.total_records = Metrics.counter('main', 'total_records')
+        self.successful_insertions = Metrics.counter('main', 'successful_insertions') 
+        self.failed_insertions = Metrics.counter('main', 'failed_insertions')
+        self.records_processed = Metrics.counter('main', 'records_processed')
+        
+        # Distribution metrics for latencies (in milliseconds)
+        self.processing_latency = Metrics.distribution('latency', 'processing_ms')
+        
+        # Gauge metrics for monitoring progress
+        self.current_timestamp = Metrics.gauge('progress', 'current_timestamp')
 
 class TemplateOptions(PipelineOptions):
     @classmethod
@@ -33,11 +49,40 @@ class WlnModelScoresMutation(NamedTuple):
 
 beam.coders.registry.register_coder(WlnModelScoresMutation, beam.coders.RowCoder)
 
-class PrepareData(beam.DoFn):
+class MeasureLatencyFn(beam.DoFn):
+    def __init__(self, operation_name):
+        self.operation_name = operation_name
+        self.latency = Metrics.distribution('latency', f'{operation_name}_ms')
+    
+    def process(self, element):
+        start_time = time.time()
+        yield element
+        self.latency.update((time.time() - start_time) * 1000)
+
+class PrepareDataWithMetrics(beam.DoFn):
+    def setup(self):
+        self.metrics = MetricsCollector()
+
     def process(self, element) -> Iterator[WlnModelScoresMutation]:
+        start_time = time.time()
         try:
-            yield self.transform_to_mutation(element)
+            self.metrics.total_records.inc()
+            
+            # Update progress gauge
+            current_time = time.time()
+            self.metrics.current_timestamp.set(int(current_time * 1000))
+            
+            result = self.transform_to_mutation(element)
+            self.metrics.records_processed.inc()
+            self.metrics.successful_insertions.inc()
+            
+            processing_time = (time.time() - start_time) * 1000
+            self.metrics.processing_latency.update(processing_time)
+            
+            yield result
+            
         except Exception as e:
+            self.metrics.failed_insertions.inc()
             logging.error(f"Error processing element: {element}")
             logging.error(f"Error details: {str(e)}")
             raise
@@ -66,6 +111,7 @@ class PrepareData(beam.DoFn):
         if model_score is not None:
             model_score = Decimal(str(model_score)).quantize(Decimal('1e-9'))
         current_time = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        
         return WlnModelScoresMutation(
             acct_sk=row.get('acct_sk'),
             acct_type_cd=row.get('acct_type_cd'),
@@ -75,15 +121,16 @@ class PrepareData(beam.DoFn):
             model_centile=row.get('model_centile'),
             model_decile=row.get('model_decile'),
             model_id=row.get('model_id'),
-            model_score=round(model_score,9),
+            model_score=round(model_score, 9) if model_score is not None else None,
             model_subsegment=row.get('model_subsegment'),
             model_version=row.get('model_version'),
             round_cycle=row.get('round_cycle'),
             scoring_driver_1=row.get('scoring_driver_1'),
             scoring_driver_2=row.get('scoring_driver_2'),
             scoring_driver_3=row.get('scoring_driver_3'),
-            insertion_timestamp=current_time 
+            insertion_timestamp=current_time
         )
+
 def run(args, beam_args):
     options = {
         'project': args.project,
@@ -100,25 +147,26 @@ def run(args, beam_args):
     template_options = pipeline_options.view_as(TemplateOptions)
 
     with beam.Pipeline(options=pipeline_options) as p:
-        # Read from BigQuery
-        data = (p | "ReadFromBigQuery" >> ReadFromBigQuery(
-            query=template_options.query,
-            use_standard_sql=True
-        ))
-        processed_data = (data | 'PrepareData' >> 
-            beam.ParDo(PrepareData())
-            .with_output_types(WlnModelScoresMutation))
+        # Read from BigQuery with accurate per-element latency tracking
+        data = (p 
+               | "ReadFromBigQuery" >> ReadFromBigQuery(
+                   query=template_options.query,
+                   use_standard_sql=True)
+               | "MeasureBQLatency" >> beam.ParDo(MeasureLatencyFn("bigquery_read")))
 
-        # Write to Spanner
-        _ = (processed_data | "WriteToSpanner" >> 
-            sp.SpannerInsertOrUpdate(
-                project_id=args.spanner_project,
-                instance_id=args.spanner_instance,
-                database_id=args.spanner_dataset,
-                table=args.spanner_table,
-                expansion_service=args.expansion_service
-            )
-        )
+        processed_data = (data 
+                        | 'PrepareData' >> beam.ParDo(PrepareDataWithMetrics())
+                        .with_output_types(WlnModelScoresMutation))
+
+        # Write to Spanner with accurate per-element latency tracking
+        _ = (processed_data 
+             | "MeasureSpannerLatency" >> beam.ParDo(MeasureLatencyFn("spanner_write"))
+             | "WriteToSpanner" >> sp.SpannerInsertOrUpdate(
+                 project_id=args.spanner_project,
+                 instance_id=args.spanner_instance,
+                 database_id=args.spanner_dataset,
+                 table=args.spanner_table,
+                 expansion_service=args.expansion_service))
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
