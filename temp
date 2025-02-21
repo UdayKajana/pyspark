@@ -192,18 +192,29 @@ class BigQueryReadMonitor(beam.DoFn):
 
 def run(args, beam_args):
     job_start_time = time.time()
+    options = {
+        'project': args.project,
+        'runner': args.runner,
+        'region': args.region,
+        'staging_location': args.staging_location,
+        'temp_location': args.temp_location,
+        'template_location': args.template_location,
+        'save_main_session': True,
+        'streaming': False
+    }
 
-    pipeline_options = PipelineOptions(beam_args)
-    pipeline_options.view_as(TemplateOptions)
+    pipeline_options = PipelineOptions.from_dictionary(options)
+    template_options = pipeline_options.view_as(TemplateOptions)
 
     with beam.Pipeline(options=pipeline_options) as p:
         # Read from BigQuery with latency monitoring
         read_start = time.time()
-        data = (p
-                | "ReadFromBigQuery" >> ReadFromBigQuery(query=args.query, use_standard_sql=True)
-                | "MonitorBigQueryRead" >> beam.ParDo(BigQueryReadMonitor()))
-        
-        # Process and monitor data
+        data = (p 
+            | "ReadFromBigQuery" >> ReadFromBigQuery(
+            query=template_options.query,
+            use_standard_sql=True
+        )                
+        | "MonitorBigQueryRead" >> beam.ParDo(BigQueryReadMonitor()))
         processed_data = (data
             | 'PrepareData' >> beam.ParDo(PrepareData()).with_output_types(WlnModelScoresMutation)
             | 'MonitorSpannerWrites' >> beam.ParDo(SpannerWriteMonitor()))
@@ -214,24 +225,30 @@ def run(args, beam_args):
                 project_id=args.spanner_project,
                 instance_id=args.spanner_instance,
                 database_id=args.spanner_dataset,
-                table=args.spanner_table
+                table=args.spanner_table,
+                expansion_service=args.expansion_service
             ))
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--project', required=True, help='Project ID')
+    parser.add_argument('--runner', default="DataflowRunner", help='Pipeline runner')
     parser.add_argument('--region', default="us-east4", help='GCP project region')
     parser.add_argument('--staging_location', required=True, help='Staging GCS bucket path')
     parser.add_argument('--temp_location', required=True, help='Temp GCS bucket path')
+    parser.add_argument('--template_location', required=True, help='GCS bucket path to save template')
     parser.add_argument('--spanner_dataset', required=True, help='spanner dataset')
     parser.add_argument('--spanner_instance', required=True, help='spanner instance')
     parser.add_argument('--spanner_project', required=True, help='spanner project')
     parser.add_argument('--spanner_table', required=True, help='spanner table')
-    parser.add_argument('--query', required=True, help='BigQuery query to execute')
+    parser.add_argument('--expansion_service', default='localhost:50768', help='Expansion service host:port')
     return parser.parse_known_args()
 
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
     known_args, beam_args = parse_arguments()
     run(known_args, beam_args)
+    print(f'Created template at {known_args.template_location}.')
 
+
+Error message from worker: SDK harness sdk-0-0 disconnected. This usually means that the process running the pipeline code has crashed. Inspect the Worker Logs and the Diagnostics tab to determine the cause of the crash.
