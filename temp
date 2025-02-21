@@ -44,13 +44,13 @@ class MetricsMonitor:
         self.records_processed = Metrics.counter('ProcessingMetrics', 'records_processed')
         self.records_written = Metrics.counter('ProcessingMetrics', 'records_written')
         self.records_failed = Metrics.counter('ProcessingMetrics', 'records_failed')
-        
+
         # Latency Metrics
         self.total_processing_time = Metrics.distribution('LatencyMetrics', 'total_processing_time_ms')
         self.transform_step_time = Metrics.distribution('LatencyMetrics', 'transform_step_time_ms')
         self.bigquery_read_latency = Metrics.distribution('LatencyMetrics', 'bigquery_read_latency_ms')
         self.spanner_write_latency = Metrics.distribution('LatencyMetrics', 'spanner_write_latency_ms')
-        
+
         # Error Metrics
         self.validation_errors = Metrics.counter('ErrorMetrics', 'validation_errors')
         self.transform_errors = Metrics.counter('ErrorMetrics', 'transform_errors')
@@ -72,26 +72,26 @@ class PrepareData(beam.DoFn):
 
     def process(self, element) -> Iterator[WlnModelScoresMutation]:
         process_start = time.time()
-        
+
         try:
             # Record processing metrics
             self.metrics.records_read.inc()
-            
+
             # Transform data
             transform_start = time.time()
             result = self.transform_to_mutation(element)
             transform_time = (time.time() - transform_start) * 1000
             self.metrics.transform_step_time.update(transform_time)
-            
+
             # Record success
             self.metrics.records_processed.inc()
             yield result
-            
+
         except ValueError as ve:
             self.metrics.validation_errors.inc()
             self.metrics.records_failed.inc()
             logging.error(f"Validation error: {str(ve)}")
-            
+
         except Exception as e:
             self.metrics.transform_errors.inc()
             self.metrics.records_failed.inc()
@@ -132,7 +132,7 @@ class PrepareData(beam.DoFn):
             if model_score is not None:
                 model_score = Decimal(str(model_score)).quantize(Decimal('1e-9'))
             current_time = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-            
+
             return WlnModelScoresMutation(
                 acct_sk=row.get('acct_sk'),
                 acct_type_cd=row.get('acct_type_cd'),
@@ -159,7 +159,7 @@ class SpannerWriteMonitor(beam.DoFn):
     def __init__(self):
         super().__init__()
         self.metrics = MetricsMonitor()
-    
+
     def process(self, element):
         write_start = time.time()
         try:
@@ -173,28 +173,43 @@ class SpannerWriteMonitor(beam.DoFn):
             write_time = (time.time() - write_start) * 1000
             self.metrics.spanner_write_latency.update(write_time)
 
+class BigQueryReadMonitor(beam.DoFn):
+    def __init__(self):
+        super().__init__()
+        self.metrics = MetricsMonitor()
+        self.read_start_time = None
+
+    def setup(self):
+        self.read_start_time = time.time()
+
+    def process(self, element):
+        yield element
+
+    def teardown(self):
+        read_end_time = time.time()
+        read_latency = (read_end_time - self.read_start_time) * 1000
+        self.metrics.bigquery_read_latency.update(read_latency)
+
 def run(args, beam_args):
     job_start_time = time.time()
-    
+
     pipeline_options = PipelineOptions(beam_args)
     pipeline_options.view_as(TemplateOptions)
 
     with beam.Pipeline(options=pipeline_options) as p:
         # Read from BigQuery with latency monitoring
         read_start = time.time()
-        data = (p | "ReadFromBigQuery" >> ReadFromBigQuery(
-            query=args.query,
-            use_standard_sql=True
-        ))
+        data = (p
+                | "ReadFromBigQuery" >> ReadFromBigQuery(query=args.query, use_standard_sql=True)
+                | "MonitorBigQueryRead" >> beam.ParDo(BigQueryReadMonitor()))
         
         # Process and monitor data
-        processed_data = (data 
-            | 'PrepareData' >> beam.ParDo(PrepareData())
-            .with_output_types(WlnModelScoresMutation)
+        processed_data = (data
+            | 'PrepareData' >> beam.ParDo(PrepareData()).with_output_types(WlnModelScoresMutation)
             | 'MonitorSpannerWrites' >> beam.ParDo(SpannerWriteMonitor()))
 
         # Write to Spanner
-        _ = (processed_data | "WriteToSpanner" >> 
+        _ = (processed_data | "WriteToSpanner" >>
             sp.SpannerInsertOrUpdate(
                 project_id=args.spanner_project,
                 instance_id=args.spanner_instance,
@@ -219,3 +234,4 @@ if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
     known_args, beam_args = parse_arguments()
     run(known_args, beam_args)
+
