@@ -1,128 +1,70 @@
-function multiLineToMultiRow() {
+function uniqueAndMultiMatch() {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var sourceSheet = spreadsheet.getActiveSheet();
   var timestamp = new Date().toISOString().replace(/[:.]/g, '_');
   var newSheet = spreadsheet.insertSheet('Split_Data_' + timestamp);
+  
+  // Get data from both columns
   var lastRow = sourceSheet.getLastRow();
   var rangeA = sourceSheet.getRange("A1:A" + lastRow).getValues();
   var rangeB = sourceSheet.getRange("B1:B" + lastRow).getValues();
-  var newData = [];
-  for (var row = 0; row < rangeA.length; row++) {
-    var tablesList = rangeA[row][0];
-    var dataset = rangeB[row][0];
-    if (!tablesList || !dataset) continue;
-    var tables = tablesList.toString().split("\n");
-    for (var i = 0; i < tables.length; i++) {
-      var tableName = tables[i].trim();
-      if (tableName) {
-        newData.push([tableName, dataset]);
+  
+  // Create a map to store unique keys and their corresponding values
+  var dataMap = new Map();
+  
+  // Process each row starting from index 1 to skip header
+  for (var row = 1; row < rangeA.length; row++) {
+    var key = rangeA[row][0];
+    var value = rangeB[row][0];
+    
+    // Skip if either key or value is empty
+    if (!key || !value) continue;
+    
+    // If key exists, append the new value; otherwise create new array
+    if (dataMap.has(key)) {
+      var existingValues = dataMap.get(key);
+      if (!existingValues.includes(value)) { // Avoid duplicate values
+        existingValues.push(value);
       }
+    } else {
+      dataMap.set(key, [value]);
     }
   }
-  if (newData.length > 0) {
-    newSheet.getRange(2, 1, newData.length, 2).setValues(newData);
+  
+  // Convert map to array for sheet output
+  var newData = [];
+  newData.push(['Key', 'Values']); // Add headers
+  
+  dataMap.forEach((values, key) => {
+    newData.push([key, values.join('\n')]);
+  });
+  
+  // Write to new sheet
+  if (newData.length > 1) { // Only write if we have data beyond headers
+    newSheet.getRange(1, 1, newData.length, 2).setValues(newData);
+    newSheet.autoResizeColumns(1, 2);
+    
+    // Apply banding to all rows except header
+    if (newData.length > 2) {
+      newSheet.getRange(2, 1, newData.length - 1, 2).applyRowBanding();
+    }
   }
-  newSheet.autoResizeColumns(1, 2);
-  if (newData.length > 0) {
-    newSheet.getRange(2, 1, newData.length, 2).applyRowBanding();
-  }
+  
+  // Activate the new sheet and show completion message
   newSheet.activate();
   SpreadsheetApp.getUi().alert(
     'Process Complete',
-    'Created ' + newData.length + ' rows in new sheet "' + newSheet.getName() + '"',
+    'Created ' + (newData.length - 1) + ' unique keys with consolidated values in "' + newSheet.getName() + '"',
     SpreadsheetApp.getUi().ButtonSet.OK
   );
 }
-function removeDuplicateRows() {
-  var ui = SpreadsheetApp.getUi();
-  var response = ui.alert(
-    'Remove Duplicates',
-    'This will remove duplicate rows and keep only the first occurrence.\nDo you want to continue?',
-    ui.ButtonSet.YES_NO
-  );
-  
-  if (response !== ui.Button.YES) {
-    return;
-  }
-  var sheet = SpreadsheetApp.getActiveSheet();
-  var dataRange = sheet.getDataRange();
-  var data = dataRange.getValues();
-  if (data.length <= 1) {
-    ui.alert('Error', 'Sheet is empty or contains only headers.', ui.ButtonSet.OK);
-    return;
-  }
-  var seen = new Set();
-  var uniqueRows = [];
-  var duplicatesCount = 0;
-  var header = data[0];
-  uniqueRows.push(header);
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    var rowString = JSON.stringify(row);
-    
-    if (!seen.has(rowString)) {
-      seen.add(rowString);
-      uniqueRows.push(row);
-    } else {
-      duplicatesCount++;
-    }
-  }
-  sheet.clearContents();
-  var newRange = sheet.getRange(1, 1, uniqueRows.length, uniqueRows[0].length);
-  newRange.setValues(uniqueRows);
-  sheet.autoResizeColumns(1, uniqueRows[0].length);
-  ui.alert(
-    'Process Complete',
-    'Removed ' + duplicatesCount + ' duplicate rows.\n' +
-    'Remaining rows: ' + (uniqueRows.length - 1) + ' (excluding header)',
-    ui.ButtonSet.OK
-  );
-}
-// function uniqueAndMultiMatch(){
-//   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-//   var sourceSheet = spreadsheet.getActiveSheet();
-//   var timestamp = new Date().toISOString().replace(/[:.]/g, '_');
-//   var newSheet = spreadsheet.insertSheet('Split_Data_' + timestamp);
-//   var lastRow = sourceSheet.getLastRow();
-//   var rangeA = sourceSheet.getRange("A1:A" + lastRow).getValues();
-//   var rangeB = sourceSheet.getRange("B1:B" + lastRow).getValues();
-//   var newData = [];
-//   for (var row = 0; row < rangeA.length; row++) {
-//     var key = rangeA[row][0];
-//     var value = rangeB[row][0];
-//     if (!key || !value) continue;
-//     for (var i = 0; i < tables.length; i++) {
-//       var tableName = tables[i].trim();
-//       if (tableName) {
-//         newData.push([tableName, value]);
-//       }
-//     }
-//     for (var i = 0; i<)
-//   }
-// }
-         
-function uniqueAndMultiMatch(){
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var sourceSheet = spreadsheet.getActiveSheet();
-  var timestamp = new Date().toISOString().replace(/[:.]/g, '_');
-  var newSheet = spreadsheet.insertSheet('Split_Data_' + timestamp);
-  var lastRow = sourceSheet.getLastRow();
-  var rangeA = sourceSheet.getRange("A1:A" + lastRow).getValues();
-  var rangeB = sourceSheet.getRange("B1:B" + lastRow).getValues();
-  var newData = [];
-  var current 
-  for( var i in rangeA){
 
-  }
-
-}
-
-
+// Update the onOpen function to include the new function
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('Custom Scripts')
-    .addItem('multiLineToMultiRow', 'multiLineToMultiRow')
-    .addItem('removeDuplicateRows','removeDuplicateRows')
-    .addItem('removeDuplicateRows','removeDuplicateRows')
+    .addItem('Multi Line to Multi Row', 'multiLineToMultiRow')
+    .addItem('Remove Duplicate Rows', 'removeDuplicateRows')
+    .addItem('Unique and Multi Match', 'uniqueAndMultiMatch')
     .addToUi();
 }
