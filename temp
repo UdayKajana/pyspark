@@ -1,83 +1,54 @@
-function createPermanentHyperlinks() {
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const range = sheet.getDataRange();
-  const values = range.getValues();
+WITH TestCombinations AS (
+  -- Test col1 alone
+  SELECT 
+    1 as test_num,
+    'col1' as columns,
+    COUNT(*) as total_rows,
+    COUNT(DISTINCT col1) as unique_combinations
+  FROM your_table
   
-  // Get column indices from user
-  const ui = SpreadsheetApp.getUi();
-  const urlColumnPrompt = ui.prompt(
-    'Enter URL column letter',
-    'Which column contains the URLs? (e.g., A, B, C)',
-    ui.ButtonSet.OK_CANCEL
-  );
+  UNION ALL
   
-  if (urlColumnPrompt.getSelectedButton() !== ui.Button.OK) return;
+  -- Test col1 + col2
+  SELECT 
+    2 as test_num,
+    'col1 + col2' as columns,
+    COUNT(*) as total_rows,
+    COUNT(DISTINCT CONCAT(col1, '|', col2)) as unique_combinations
+  FROM your_table
   
-  const displayTextColumnPrompt = ui.prompt(
-    'Enter display text column letter',
-    'Which column contains the display text? (e.g., A, B, C)',
-    ui.ButtonSet.OK_CANCEL
-  );
+  UNION ALL
   
-  if (displayTextColumnPrompt.getSelectedButton() !== ui.Button.OK) return;
+  -- Test col1 + col2 + col3
+  SELECT 
+    3 as test_num,
+    'col1 + col2 + col3' as columns,
+    COUNT(*) as total_rows,
+    COUNT(DISTINCT CONCAT(col1, '|', col2, '|', col3)) as unique_combinations
+  FROM your_table
   
-  // Convert column letters to indices (0-based)
-  const urlColumn = columnLetterToIndex(urlColumnPrompt.getResponseText().toUpperCase());
-  const displayTextColumn = columnLetterToIndex(displayTextColumnPrompt.getResponseText().toUpperCase());
+  UNION ALL
   
-  // Create new column for hyperlinks
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '_');
-  const newSheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet('Hyperlinks_' + timestamp);
-  
-  // Create hyperlink formulas
-  const hyperlinks = values.map((row, rowIndex) => {
-    if (rowIndex === 0) {
-      // Return header
-      return ['Display Text', 'URL', 'Hyperlink'];
-    }
-    
-    const url = row[urlColumn];
-    const displayText = row[displayTextColumn];
-    
-    if (!url || !displayText) return ['', '', ''];
-    
-    // Create permanent hyperlink formula
-    const hyperlinkFormula = `=HYPERLINK("${url}","${displayText}")`;
-    
-    return [displayText, url, hyperlinkFormula];
-  });
-  
-  // Write to new sheet
-  newSheet.getRange(1, 1, hyperlinks.length, 3).setValues(hyperlinks);
-  
-  // Format the sheet
-  newSheet.autoResizeColumns(1, 3);
-  newSheet.getRange(2, 1, hyperlinks.length - 1, 3).applyRowBanding();
-  
-  // Activate the new sheet
-  newSheet.activate();
-  
-  ui.alert(
-    'Process Complete',
-    'Created permanent hyperlinks in new sheet "' + newSheet.getName() + '"',
-    ui.ButtonSet.OK
-  );
-}
+  -- Test col1 + col2 + col3 + col4
+  SELECT 
+    4 as test_num,
+    'col1 + col2 + col3 + col4' as columns,
+    COUNT(*) as total_rows,
+    COUNT(DISTINCT CONCAT(col1, '|', col2, '|', col3, '|', col4)) as unique_combinations
+  FROM your_table
+)
 
-// Helper function to convert column letter to index (0-based)
-function columnLetterToIndex(letter) {
-  let column = 0;
-  const length = letter.length;
-  for (let i = 0; i < length; i++) {
-    column += (letter.charCodeAt(i) - 64) * Math.pow(26, length - i - 1);
-  }
-  return column - 1;
-}
-
-// Add to menu
-function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  ui.createMenu('Custom Scripts')
-    .addItem('Create Permanent Hyperlinks', 'createPermanentHyperlinks')
-    .addToUi();
-}
+SELECT 
+  columns,
+  total_rows,
+  unique_combinations,
+  CASE 
+    WHEN total_rows = unique_combinations THEN 'Is Candidate Key'
+    ELSE 'Not a Candidate Key'
+  END as is_candidate_key,
+  CASE 
+    WHEN total_rows = unique_combinations THEN 'Found candidate key'
+    ELSE FORMAT('Missing %d unique combinations', total_rows - unique_combinations)
+  END as details
+FROM TestCombinations
+ORDER BY test_num;
