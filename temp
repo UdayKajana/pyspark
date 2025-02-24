@@ -1,70 +1,83 @@
-function uniqueAndMultiMatch() {
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var sourceSheet = spreadsheet.getActiveSheet();
-  var timestamp = new Date().toISOString().replace(/[:.]/g, '_');
-  var newSheet = spreadsheet.insertSheet('Split_Data_' + timestamp);
+function createPermanentHyperlinks() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const range = sheet.getDataRange();
+  const values = range.getValues();
   
-  // Get data from both columns
-  var lastRow = sourceSheet.getLastRow();
-  var rangeA = sourceSheet.getRange("A1:A" + lastRow).getValues();
-  var rangeB = sourceSheet.getRange("B1:B" + lastRow).getValues();
+  // Get column indices from user
+  const ui = SpreadsheetApp.getUi();
+  const urlColumnPrompt = ui.prompt(
+    'Enter URL column letter',
+    'Which column contains the URLs? (e.g., A, B, C)',
+    ui.ButtonSet.OK_CANCEL
+  );
   
-  // Create a map to store unique keys and their corresponding values
-  var dataMap = new Map();
+  if (urlColumnPrompt.getSelectedButton() !== ui.Button.OK) return;
   
-  // Process each row starting from index 1 to skip header
-  for (var row = 1; row < rangeA.length; row++) {
-    var key = rangeA[row][0];
-    var value = rangeB[row][0];
-    
-    // Skip if either key or value is empty
-    if (!key || !value) continue;
-    
-    // If key exists, append the new value; otherwise create new array
-    if (dataMap.has(key)) {
-      var existingValues = dataMap.get(key);
-      if (!existingValues.includes(value)) { // Avoid duplicate values
-        existingValues.push(value);
-      }
-    } else {
-      dataMap.set(key, [value]);
+  const displayTextColumnPrompt = ui.prompt(
+    'Enter display text column letter',
+    'Which column contains the display text? (e.g., A, B, C)',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (displayTextColumnPrompt.getSelectedButton() !== ui.Button.OK) return;
+  
+  // Convert column letters to indices (0-based)
+  const urlColumn = columnLetterToIndex(urlColumnPrompt.getResponseText().toUpperCase());
+  const displayTextColumn = columnLetterToIndex(displayTextColumnPrompt.getResponseText().toUpperCase());
+  
+  // Create new column for hyperlinks
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '_');
+  const newSheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet('Hyperlinks_' + timestamp);
+  
+  // Create hyperlink formulas
+  const hyperlinks = values.map((row, rowIndex) => {
+    if (rowIndex === 0) {
+      // Return header
+      return ['Display Text', 'URL', 'Hyperlink'];
     }
-  }
-  
-  // Convert map to array for sheet output
-  var newData = [];
-  newData.push(['Key', 'Values']); // Add headers
-  
-  dataMap.forEach((values, key) => {
-    newData.push([key, values.join('\n')]);
+    
+    const url = row[urlColumn];
+    const displayText = row[displayTextColumn];
+    
+    if (!url || !displayText) return ['', '', ''];
+    
+    // Create permanent hyperlink formula
+    const hyperlinkFormula = `=HYPERLINK("${url}","${displayText}")`;
+    
+    return [displayText, url, hyperlinkFormula];
   });
   
   // Write to new sheet
-  if (newData.length > 1) { // Only write if we have data beyond headers
-    newSheet.getRange(1, 1, newData.length, 2).setValues(newData);
-    newSheet.autoResizeColumns(1, 2);
-    
-    // Apply banding to all rows except header
-    if (newData.length > 2) {
-      newSheet.getRange(2, 1, newData.length - 1, 2).applyRowBanding();
-    }
-  }
+  newSheet.getRange(1, 1, hyperlinks.length, 3).setValues(hyperlinks);
   
-  // Activate the new sheet and show completion message
+  // Format the sheet
+  newSheet.autoResizeColumns(1, 3);
+  newSheet.getRange(2, 1, hyperlinks.length - 1, 3).applyRowBanding();
+  
+  // Activate the new sheet
   newSheet.activate();
-  SpreadsheetApp.getUi().alert(
+  
+  ui.alert(
     'Process Complete',
-    'Created ' + (newData.length - 1) + ' unique keys with consolidated values in "' + newSheet.getName() + '"',
-    SpreadsheetApp.getUi().ButtonSet.OK
+    'Created permanent hyperlinks in new sheet "' + newSheet.getName() + '"',
+    ui.ButtonSet.OK
   );
 }
 
-// Update the onOpen function to include the new function
+// Helper function to convert column letter to index (0-based)
+function columnLetterToIndex(letter) {
+  let column = 0;
+  const length = letter.length;
+  for (let i = 0; i < length; i++) {
+    column += (letter.charCodeAt(i) - 64) * Math.pow(26, length - i - 1);
+  }
+  return column - 1;
+}
+
+// Add to menu
 function onOpen() {
-  var ui = SpreadsheetApp.getUi();
+  const ui = SpreadsheetApp.getUi();
   ui.createMenu('Custom Scripts')
-    .addItem('Multi Line to Multi Row', 'multiLineToMultiRow')
-    .addItem('Remove Duplicate Rows', 'removeDuplicateRows')
-    .addItem('Unique and Multi Match', 'uniqueAndMultiMatch')
+    .addItem('Create Permanent Hyperlinks', 'createPermanentHyperlinks')
     .addToUi();
 }
