@@ -1,24 +1,128 @@
-function updateHyperlinks() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var rangeA = sheet.getRange('A2:A');  // Assuming DAG names are in column A, starting from row 2
-  var rangeB = sheet.getRange('B2:B');  // Assuming temporary URLs are in column B, starting from row 2
-  var rangeC = sheet.getRange('C2:C');  // Assuming you want to update hyperlinks in column C
-  
-  var dataA = rangeA.getValues();  // Get the DAG names (text)
-  var dataB = rangeB.getValues();  // Get the temporary URLs
-
-  // Loop through the rows
-  for (var i = 0; i < dataA.length; i++) {
-    var text = dataA[i][0];  // Text from Column A
-    var tempUrl = dataB[i][0];  // URL from Column B
-
-    // Create the new URL (replace this logic with the actual URL structure you need)
-    var newUrl = "https://example.com/" + text;  // Modify this line to match your final URL format
-
-    // Create the independent hyperlink formula for Column C
-    var formula = '=HYPERLINK("' + newUrl + '","' + text + '")';
-    
-    // Set the hyperlink formula in Column C
-    rangeC.getCell(i + 1, 1).setFormula(formula);
+function multiLineToMultiRow() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sourceSheet = spreadsheet.getActiveSheet();
+  var timestamp = new Date().toISOString().replace(/[:.]/g, '_');
+  var newSheet = spreadsheet.insertSheet('Split_Data_' + timestamp);
+  var lastRow = sourceSheet.getLastRow();
+  var rangeA = sourceSheet.getRange("A1:A" + lastRow).getValues();
+  var rangeB = sourceSheet.getRange("B1:B" + lastRow).getValues();
+  var newData = [];
+  for (var row = 0; row < rangeA.length; row++) {
+    var tablesList = rangeA[row][0];
+    var dataset = rangeB[row][0];
+    if (!tablesList || !dataset) continue;
+    var tables = tablesList.toString().split("\n");
+    for (var i = 0; i < tables.length; i++) {
+      var tableName = tables[i].trim();
+      if (tableName) {
+        newData.push([tableName, dataset]);
+      }
+    }
   }
+  if (newData.length > 0) {
+    newSheet.getRange(2, 1, newData.length, 2).setValues(newData);
+  }
+  newSheet.autoResizeColumns(1, 2);
+  if (newData.length > 0) {
+    newSheet.getRange(2, 1, newData.length, 2).applyRowBanding();
+  }
+  newSheet.activate();
+  SpreadsheetApp.getUi().alert(
+    'Process Complete',
+    'Created ' + newData.length + ' rows in new sheet "' + newSheet.getName() + '"',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
+function removeDuplicateRows() {
+  var ui = SpreadsheetApp.getUi();
+  var response = ui.alert(
+    'Remove Duplicates',
+    'This will remove duplicate rows and keep only the first occurrence.\nDo you want to continue?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (response !== ui.Button.YES) {
+    return;
+  }
+  var sheet = SpreadsheetApp.getActiveSheet();
+  var dataRange = sheet.getDataRange();
+  var data = dataRange.getValues();
+  if (data.length <= 1) {
+    ui.alert('Error', 'Sheet is empty or contains only headers.', ui.ButtonSet.OK);
+    return;
+  }
+  var seen = new Set();
+  var uniqueRows = [];
+  var duplicatesCount = 0;
+  var header = data[0];
+  uniqueRows.push(header);
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var rowString = JSON.stringify(row);
+    
+    if (!seen.has(rowString)) {
+      seen.add(rowString);
+      uniqueRows.push(row);
+    } else {
+      duplicatesCount++;
+    }
+  }
+  sheet.clearContents();
+  var newRange = sheet.getRange(1, 1, uniqueRows.length, uniqueRows[0].length);
+  newRange.setValues(uniqueRows);
+  sheet.autoResizeColumns(1, uniqueRows[0].length);
+  ui.alert(
+    'Process Complete',
+    'Removed ' + duplicatesCount + ' duplicate rows.\n' +
+    'Remaining rows: ' + (uniqueRows.length - 1) + ' (excluding header)',
+    ui.ButtonSet.OK
+  );
+}
+// function uniqueAndMultiMatch(){
+//   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+//   var sourceSheet = spreadsheet.getActiveSheet();
+//   var timestamp = new Date().toISOString().replace(/[:.]/g, '_');
+//   var newSheet = spreadsheet.insertSheet('Split_Data_' + timestamp);
+//   var lastRow = sourceSheet.getLastRow();
+//   var rangeA = sourceSheet.getRange("A1:A" + lastRow).getValues();
+//   var rangeB = sourceSheet.getRange("B1:B" + lastRow).getValues();
+//   var newData = [];
+//   for (var row = 0; row < rangeA.length; row++) {
+//     var key = rangeA[row][0];
+//     var value = rangeB[row][0];
+//     if (!key || !value) continue;
+//     for (var i = 0; i < tables.length; i++) {
+//       var tableName = tables[i].trim();
+//       if (tableName) {
+//         newData.push([tableName, value]);
+//       }
+//     }
+//     for (var i = 0; i<)
+//   }
+// }
+         
+function uniqueAndMultiMatch(){
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sourceSheet = spreadsheet.getActiveSheet();
+  var timestamp = new Date().toISOString().replace(/[:.]/g, '_');
+  var newSheet = spreadsheet.insertSheet('Split_Data_' + timestamp);
+  var lastRow = sourceSheet.getLastRow();
+  var rangeA = sourceSheet.getRange("A1:A" + lastRow).getValues();
+  var rangeB = sourceSheet.getRange("B1:B" + lastRow).getValues();
+  var newData = [];
+  var current 
+  for( var i in rangeA){
+
+  }
+
+}
+
+
+function onOpen() {
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu('Custom Scripts')
+    .addItem('multiLineToMultiRow', 'multiLineToMultiRow')
+    .addItem('removeDuplicateRows','removeDuplicateRows')
+    .addItem('removeDuplicateRows','removeDuplicateRows')
+    .addToUi();
 }
