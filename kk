@@ -1,18 +1,30 @@
+Error executing query: 'NoneType' object has no attribute 'row_type'
+
+Data in network_wls_model.test_table_1:
+Error executing query: 'NoneType' object has no attribute 'row_type'
+
+Executing INNER JOIN query:
+Error executing query: 'NoneType' object has no attribute 'row_type'
+
+Executing LEFT JOIN query:
+Error executing query: 'NoneType' object has no attribute 'row_type'
+
+Executing RIGHT JOIN query:
+Error executing query: 'NoneType' object has no attribute 'row_type'
+
+Executing FULL OUTER JOIN query:
+Error executing query: 'NoneType' object has no attribute 'row_type'
+ for below code;
+
+
 import os
 from google.cloud import spanner
-
-# Set credentials
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = "/home/sL_dtwin/.sak/sa-dev-gudv-app-dtwndo-0_key.json"
-
-# Set up client
 project = 'vz-it-np-jpuv-dev-anpdo-0'
 instance_id = "anp-spanner-instance"
 client = spanner.Client(project=project)
 instance = client.instance(instance_id)
-
-# Create functions to handle database operations
 def execute_ddl(database, ddl_statements):
-    """Execute DDL statements (CREATE TABLE, etc.)"""
     try:
         operation = database.update_ddl(ddl_statements)
         print(f"Waiting for operation to complete...")
@@ -22,29 +34,22 @@ def execute_ddl(database, ddl_statements):
         print(f"Error executing DDL statements: {str(e)}")
 
 def execute_dml(database, dml_statement):
-    """Execute DML statements (INSERT, UPDATE, DELETE)"""
     try:
         def update_data(transaction):
             row_count = transaction.execute_update(dml_statement)
             print(f"Modified {row_count} rows.")
-        
         database.run_in_transaction(update_data)
         print(f"DML statement executed successfully.")
     except Exception as e:
         print(f"Error executing DML statement: {str(e)}")
 
 def execute_query(database, query):
-    """Execute a query and print results"""
     try:
         with database.snapshot() as snapshot:
             results = snapshot.execute_sql(query)
-            
-            # Print column names
             column_names = [column[0] for column in results.metadata.row_type.fields]
             print(" | ".join(column_names))
             print("-" * 80)
-            
-            # Print results
             row_count = 0
             for row in results:
                 row_count += 1
@@ -53,8 +58,6 @@ def execute_query(database, query):
             print(f"\nTotal rows: {row_count}")
     except Exception as e:
         print(f"Error executing query: {str(e)}")
-
-# Connect to the two databases
 db1 = instance.database("wireline_churn")
 db2 = instance.database("network_wls_model")
 
@@ -74,8 +77,8 @@ create_table2 = [
 ]
 
 print("Creating tables...")
-execute_ddl(db1, create_table1)
-execute_ddl(db2, create_table2)
+# execute_ddl(db1, create_table1)
+# execute_ddl(db2, create_table2)
 
 # 2. Insert data
 insert_table1 = """INSERT INTO test_table_2 (id, name)
@@ -105,8 +108,8 @@ VALUES
   (10, 'Jennifer White')"""
 
 print("\nInserting data into tables...")
-execute_dml(db1, insert_table1)
-execute_dml(db2, insert_table2)
+# execute_dml(db1, insert_table1)
+# execute_dml(db2, insert_table2)
 
 # 3. Display table contents
 print("\nData in wireline_churn.test_table_2:")
