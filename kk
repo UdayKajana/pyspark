@@ -1,18 +1,4 @@
-gcloud spanner databases execute-sql wireline_churn \
-  --instance=anp-spanner-instance \
-  --project=vz-it-np-jpuv-dev-anpdo-0 \
-  --sql="SELECT * FROM INFORMATION_SCHEMA.DATABASES"
+Workflow failed. Causes: S13:ReadFromBigQuery/Read/SDFBoundedSourceReader/ParDo(SDFBoundedSourceDoFn)/ProcessElementAndRestrictionWithSizing+ReadFromBigQuery/_PassThroughThenCleanup/ParDo(PassThrough)/ParDo(PassThrough)+PrepareData+WriteToSpanner/MapElements/Map/ParMultiDo(Anonymous)+WriteToSpanner/SpannerIO.Write/To mutation group/ParMultiDo(ToMutationGroup)+WriteToSpanner/SpannerIO.Write/Write mutations to Cloud Spanner/RewindowIntoGlobal/Window.Assign+WriteToSpanner/SpannerIO.Write/Write mutations to Cloud Spanner/Filter Unbatchable Mutations+WriteToSpanner/SpannerIO.Write/Write mutations to Cloud Spanner/Write batches to Spanner+WriteToSpanner/SpannerIO.Write/Write mutations to Cloud Spanner/Gather Sort And Create Batches/ParMultiDo(GatherSortCreateBatches)+WriteToSpanner/SpannerIO.Write/Write mutations to Cloud Spanner/Write batches to Spanner failed., The job failed because a work item has failed 4 times. Look in previous log entries for the cause of each one of the 4 failures. If the logs only contain generic timeout errors related to accessing external resources, such as MongoDB, verify that the worker service account has permission to access the resource's subnetwork. For more information, see https://cloud.google.com/dataflow/docs/guides/common-errors. The work item was attempted on these workers: 
 
-
-gcloud spanner databases execute-sql wireline_churn \
-  --instance=anp-spanner-instance \
-  --project=vz-it-np-jpuv-dev-anpdo-0 \
-  --sql="SELECT * FROM projects/vz-it-np-jpuv-dev-anpdo-0/instances/anp-spanner-instance/databases/network_wls_model/tables/test_table_1"
-
-
-gcloud spanner databases execute-sql wireline_churn \
-  --instance=anp-spanner-instance \
-  --project=vz-it-np-jpuv-dev-anpdo-0 \
-  --sql="WITH local_data AS (SELECT * FROM test_table_2)
-        SELECT * FROM local_data 
-        WHERE id IN (SELECT id FROM network_wls_model.test_table_1)"
+      Root cause: Timed out waiting for an update from the worker.
+      Worker ID: nqes-site-long-32-df5dabc-03060511-4toi-harness-xhqs,
