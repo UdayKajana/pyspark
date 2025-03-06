@@ -1,3 +1,7 @@
+error executing select statement: 400 Table not found: wireline_churn.test_table_2 [at 1:19]\nSELECT t1.id FROM wireline_churn.test_table_2 AS t1 INNER JOIN network_wls_mo...\n                  ^ [locale: "en-US"
+message: "Table not found: wireline_churn.test_table_2 [at 1:19]\nSELECT t1.id FROM wireline_churn.test_table_2 AS t1 INNER JOIN network_wls_mo...\n 
+
+
 import os
 from google.cloud import spanner
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = "/home/sL_dtwin/.sak/sa-dev-gudv-app-dtwndo-0_key.json"
@@ -7,47 +11,16 @@ database_id = "wireline_churn"
 client = spanner.Client(project=project)
 instance = client.instance(instance_id)
 database = instance.database(database_id)
+# gcloud spanner databases execute-sql wireline_churn --instance=anp-spanner-instance --sql=
 
-# Execute insert statements
-try:
-    # For INSERT statements, we need to use read-write transactions
-    with database.batch() as batch:
-        batch.execute_update(tb1_ins)
-    print("Inserted data into test_table_1")
-    
-    with database.batch() as batch:
-        batch.execute_update(tb2_ins)
-    print("Inserted data into test_table_2")
-except Exception as e:
-    print(f"Error executing insert statements: {str(e)}")
-
-# Execute join queries
-join_queries = {
-    "INNER JOIN": inner_join,
-    "LEFT JOIN": left_join,
-    "RIGHT JOIN": right_join,
-    "FULL OUTER JOIN": full_outer_join
-}
+q= 'SELECT t1.id FROM wireline_churn.test_table_2 AS t1 INNER JOIN network_wls_model.test_table_1 AS t2 ON t1.id = t2.id'
 
 try:
-    for join_type, query in join_queries.items():
-        print(f"\n--- {join_type} Results ---")
-        with database.snapshot() as snapshot:
-            results = snapshot.execute_sql(query)
-            column_names = [column[0] for column in results.metadata.row_type.fields]
-            print(" | ".join(column_names))
-            print("-" * 80)
-            for row in results:
-                print(" | ".join(str(value) for value in row))
-except Exception as e:
-    print(f"Error executing join queries: {str(e)}")
-
-# Original count queries
-try:
-    for i in count_queries:
+    for i in [q]:
         with database.snapshot() as snapshot:
             results = snapshot.execute_sql(i)
             for row in results:
                 print(row)
 except Exception as e:
-    print(f"Error executing select statement: {str(e)}")
+    print(f"error executing select statement: {str(e)}")
+
