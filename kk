@@ -1,4 +1,12 @@
-Workflow failed. Causes: S13:ReadFromBigQuery/Read/SDFBoundedSourceReader/ParDo(SDFBoundedSourceDoFn)/ProcessElementAndRestrictionWithSizing+ReadFromBigQuery/_PassThroughThenCleanup/ParDo(PassThrough)/ParDo(PassThrough)+PrepareData+WriteToSpanner/MapElements/Map/ParMultiDo(Anonymous)+WriteToSpanner/SpannerIO.Write/To mutation group/ParMultiDo(ToMutationGroup)+WriteToSpanner/SpannerIO.Write/Write mutations to Cloud Spanner/RewindowIntoGlobal/Window.Assign+WriteToSpanner/SpannerIO.Write/Write mutations to Cloud Spanner/Filter Unbatchable Mutations+WriteToSpanner/SpannerIO.Write/Write mutations to Cloud Spanner/Write batches to Spanner+WriteToSpanner/SpannerIO.Write/Write mutations to Cloud Spanner/Gather Sort And Create Batches/ParMultiDo(GatherSortCreateBatches)+WriteToSpanner/SpannerIO.Write/Write mutations to Cloud Spanner/Write batches to Spanner failed., The job failed because a work item has failed 4 times. Look in previous log entries for the cause of each one of the 4 failures. If the logs only contain generic timeout errors related to accessing external resources, such as MongoDB, verify that the worker service account has permission to access the resource's subnetwork. For more information, see https://cloud.google.com/dataflow/docs/guides/common-errors. The work item was attempted on these workers: 
-
-      Root cause: Timed out waiting for an update from the worker.
-      Worker ID: nqes-site-long-32-df5dabc-03060511-4toi-harness-xhqs,
+Stage name
+F44
+Status
+ Running
+Progress
+5%
+Start time
+March 7, 2025 at 5:16:56 PM GMT+5
+End time
+—
+Component steps
+ParDo(SDFBoundedSourceDoFn), SDFBoundedSourceReader, Read, ReadFromBigQuery, Workflow, ParDo(PassThrough), ParDo(PassThrough), _PassThroughThenCleanup, PrepareData, ParMultiDo(Anonymous), Map, MapElements, WriteToSpanner, ParMultiDo(ToMutationGroup), To mutation group, SpannerIO.Write, Window.Assign, RewindowIntoGlobal, Write mutations to Cloud Spanner, Filter Unbatchable Mutations, Write batches to Spanner, ParMultiDo(GatherSortCreateBatches), and Gather Sort And Create Batches
