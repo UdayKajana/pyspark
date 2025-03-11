@@ -1,3 +1,36 @@
+Error message from worker: Traceback (most recent call last):
+  File "apache_beam/runners/common.py", line 1501, in apache_beam.runners.common.DoFnRunner.process
+  File "apache_beam/runners/common.py", line 689, in apache_beam.runners.common.SimpleInvoker.invoke_process
+  File "apache_beam/runners/common.py", line 1677, in apache_beam.runners.common._OutputHandler.handle_process_outputs
+  File "/apps/opt/application/udayka/spanner/bq_spaner/src/main/python/pipeline.py", line 42, in process
+  File "/apps/opt/application/udayka/spanner/bq_spaner/src/main/python/pipeline.py", line 48, in transform_to_mutation
+  File "/opt/apache/beam-venv/beam-venv-worker-sdk-1-0/lib/python3.9/site-packages/mutations/Mutations.py", line 629, in setMutation
+    mhour_ts = Convertions.date_hour_to_timestamp(row.get('mhour')),
+  File "/opt/apache/beam-venv/beam-venv-worker-sdk-1-0/lib/python3.9/site-packages/mutations/Mutations.py", line 668, in date_hour_to_timestamp
+    formated_date_hr = datetime.strptime(str_date_value, "%Y-%m-%d%H")
+  File "/usr/local/lib/python3.9/_strptime.py", line 568, in _strptime_datetime
+    tt, fraction, gmtoff_fraction = _strptime(data_string, format)
+  File "/usr/local/lib/python3.9/_strptime.py", line 349, in _strptime
+    raise ValueError("time data %r does not match format %r" %
+ValueError: time data '2025030512' does not match format '%Y-%m-%d%H'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 311, in _execute
+    response = task()
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 386, in <lambda>
+    lambda: self.create_worker().do_instruction(request), request)
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 656, in do_instruction
+    return getattr(self, request_type)(
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/sdk_worker.py", line 694, in process_bundle
+    bundle_processor.process_bundle(instruction_id))
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/bundle_processor.py", line 1119, in process_bundle
+    input_op_by_transform_id[element.transform_id].process_encoded(
+  File "/usr/local/lib/python3.9/site-packages/apache_beam/runners/worker/bundle_processor.py", line 237, in process_encoded
+    self.output(decoded_value)
+
+
 from typing import NamedTuple, Iterator, Optional
 from datetime import date, datetime, timedelta
 import logging
