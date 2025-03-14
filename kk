@@ -1,127 +1,123 @@
-import argparse
-import time
-from mutations.Mutations import *
+from datetime import datetime, timedelta
+from functools import partial
+import pendulum
+from airflow import DAG, AirflowException
+import os
+import sys
+import yaml
 import logging
-from typing import NamedTuple, Iterator, Optional
-import apache_beam as beam
-import apache_beam.io.gcp.spanner as sp
-from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.io.gcp.bigquery import ReadFromBigQuery
-from decimal import Decimal
-from datetime import date, datetime
+from airflow.operators.dummy import DummyOperator
+from airflow.operators.python import PythonOperator
+from airflow.providers.google.cloud.operators.dataflow import DataflowTemplatedJobStartOperator
 
-class TemplateOptions(PipelineOptions):
-    @classmethod
-    def _add_argparse_args(cls, parser):
-        parser.add_value_provider_argument('--query', type=str)
-def parse_arguments():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--project', required=True, help='Project ID')
-    parser.add_argument('--runner', default="DataflowRunner", help='Pipeline runner')
-    parser.add_argument('--region', default="us-east4", help='GCP project region')
-    parser.add_argument('--staging_location', required=True, help='Staging GCS bucket path')
-    parser.add_argument('--temp_location', required=True, help='Temp GCS bucket path')
-    parser.add_argument('--template_location', required=True, help='GCS bucket path to save template')
-    parser.add_argument('--spanner_dataset', required=True, help='spanner dataset')
-    parser.add_argument('--spanner_instance', required=True, help='spanner instance')
-    parser.add_argument('--spanner_project', required=True, help='spanner project')
-    parser.add_argument('--spanner_table', required=True, help='spanner table')
-    parser.add_argument('--process', required=True, help='process')
-    parser.add_argument('--expansion_service', default='localhost:50768', help='Expansion service host:port')
-    parser.add_argument('--setup_file', dest='setup_file', default='./setup.py', required=False, help='setup_file')
-    return parser.parse_known_args()
+# Constants
+BASE_DIR = "/home/airflow/gcs/dags/vz-it-gudv-dtwndo-0/bq_spanner/config"
+sys.path.append(f"{BASE_DIR}")
 
-logging.getLogger().setLevel(logging.ERROR)
-known_args, beam_args = parse_arguments()
+trans_date = '{{ (data_interval_end - macros.timedelta(days=1)).strftime("%Y-%m-%d") }}'
 
-mutation = getMutation(known_args.process)
-# Register coder early to ensure it's available throughout the pipeline
-beam.coders.registry.register_coder(mutation, beam.coders.RowCoder)
+def load_configs():
+    try:
+        project = os.environ.get('GCP_PROJECT')
+        if not project:
+            raise AirflowException("GCP_PROJECT environment variable not set")
+        logging.info(f"Loading configurations for project: {project}")
+        with open(f"{BASE_DIR}/base_config.yaml", 'r') as file:
+            base_config = yaml.safe_load(file)
+            logging.info(f"Loaded base config: {base_config}")
 
-class RateLimitFn(beam.DoFn):
-    def __init__(self, elements_per_minute=100000):
-        self.elements_per_minute = elements_per_minute
-        self.elements_per_second = elements_per_minute / 60.0
-        self.last_yield_time = None
-        self.counter = 0
+        # Load DAG config
+        with open(f"{BASE_DIR}/ug_imsi_level_ericsson_raw_v1.yaml", 'r') as file:
+            dag_config = yaml.safe_load(file)
+            logging.info(f"Loaded DAG config: {dag_config}")
+
+        config_values = {}
         
-    def start_bundle(self):
-        self.last_yield_time = time.time()
-        self.counter = 0
-    
-    def process(self, element):
-        current_time = time.time()
-        self.counter += 1
+        filtered_base_dict = dict(filter(lambda elem: elem[0] == project, base_config.items()))
+        if not filtered_base_dict:
+            raise AirflowException(f"No base configuration found for project {project}")
         
-        # Check if we need to throttle
-        if self.counter >= self.elements_per_second:
-            elapsed = current_time - self.last_yield_time
-            if elapsed < 1.0:
-                sleep_time = 1.0 - elapsed
-                time.sleep(sleep_time)
-            
-            # Reset counter and timer
-            self.counter = 0
-            self.last_yield_time = time.time()
+        filtered_dict = dict(filter(lambda elem: elem[0] == project, dag_config.items()))
+        if not filtered_dict:
+            raise AirflowException(f"No DAG configuration found for project {project}")
+
+        base_value = filtered_base_dict[project][0]
+        app_value = filtered_dict[project][0]
         
-        yield element
+        config_values = {**config_values, **base_value, **app_value}
+        logging.info(f"Final merged config: {config_values}")
+        return config_values
+    except Exception as e:
+        logging.error(f"Error loading configurations: {str(e)}")
+        raise AirflowException(f"Configuration loading failed: {str(e)}")
 
-class PrepareData(beam.DoFn):
-    def process(self, element) -> Iterator[mutation]:  # Explicitly specify return type
-        try:
-            yield self.transform_to_mutation(element)
-        except Exception as e:
-            logging.error(f"Error processing element: {element}")
-            logging.error(f"Error details: {str(e)}")
-            raise
-    
-    def transform_to_mutation(self, row):
-        return mutation.setMutation(row)
+config_values = load_configs()
+# query = str(config_values['query']).replace("current_date_value",trans_date)
+# logging.info((query+"\n")*10)
 
-options = {
-    'project': known_args.project,
-    'runner': known_args.runner,
-    'region': known_args.region,
-    'staging_location': known_args.staging_location,
-    'temp_location': known_args.temp_location,
-    'template_location': known_args.template_location,
-    'setup_file': known_args.setup_file,
-    'save_main_session': True,
-    'streaming': False
+default_args = {
+    'owner': 'dtwin',
+    'depends_on_past': False,
+    'start_date': pendulum.datetime(2023, 2, 16, 23, tz="UTC"),
+    'email_on_failure': True,
+    'email_on_retry': False,
+    'retries': 0,
+    'retry_delay': timedelta(minutes=5)
 }
+def print_query():
+    logging.info( f"""{config_values['query']} DATE('{{ (data_interval_end - macros.timedelta(days=1)).strftime("%Y-%m-%d") }}')""")
 
-pipeline_options = PipelineOptions.from_dictionary(options)
-template_options = pipeline_options.view_as(TemplateOptions)
-with beam.Pipeline(options=pipeline_options) as p:
-    # Read from BigQuery
-    data = (p | "ReadFromBigQuery" >> ReadFromBigQuery(
-        query=template_options.query,
-        use_standard_sql=True,
-        bigquery_job_labels={'parallelism': '50'}
-    ))
+def params_print_fun(**kwargs):
+    print("---------Printing All Job Params---------------")
+    print(kwargs)
+
+dt_val = datetime.strptime('{{(data_interval_end - macros.timedelta(days=2, hours=1)).strftime("%Y-%m-%d %H:%M:%S")}}','%Y-%m-%d %H:%M:%S')
+str_query = str(config_values['query']).replace('CURRENT_DATE_VALUE', f"""'{dt_val.strftime("%Y-%m-%d")}'""") 
+str_query = str(config_values['query']).replace('CURRENT_DT_HR_VALUE', f"""'{dt_val.strftime("%Y%m%d%H")}'""")
+job_params = {
+     "query": str_query,
+}
+# "query2": f"""{config_values['query']} DATE('{{ data_interval_end.strftime("%Y-%m-%d") }}')""",
+with DAG(
+    dag_id=config_values['dag_id'],
+    schedule_interval= None if config_values['schedule_interval']=='None' else config_values['schedule_interval'],
+    catchup=False,
+    default_args=default_args,
+    description='Wireline Model Scores Processing DAG',
+    concurrency=1,
+    max_active_runs=1,
+    tags=["dtwin","bq_spanner"]
+) as dag:
+    start = PythonOperator(task_id='start',
+                           python_callable=params_print_fun,
+                           op_kwargs= job_params,
+                           provide_context=True)
     
-    # Add fusion break and rate limiting before data preparation
-    rate_limited_data = (data 
-        | "FusionBreak" >> beam.Reshuffle()
-        | "RateLimitBeforePrep" >> beam.ParDo(RateLimitFn(elements_per_minute=100000))
+    trigger_template_task = DataflowTemplatedJobStartOperator(
+        task_id=config_values['task_id'],
+        template=config_values['template_path'],
+        parameters=job_params,
+        location=config_values['region'],
+        project_id=config_values['project_id'],
+        gcp_conn_id=config_values.get('google_cloud_conn_id', 'google_cloud_default'),
+        job_name=config_values['job_name'],
+        wait_until_finished=True,
+        environment={
+            "numWorkers": str(config_values.get('num_workers', 1)),
+            "maxWorkers": str(config_values.get('max_workers', 1)),
+            "tempLocation": config_values['temp_location'],
+            # "machineType": config_values.get('worker_machine_type', 'n1-standard-2'),
+            "network": config_values['network'],
+            'subnetwork': config_values['subnetwork'],
+            "kmsKeyName": config_values['kmsKeyName'],
+            "workerRegion": config_values['region'],
+            "enableStreamingEngine": True,
+            "ipConfiguration": "WORKER_IP_PRIVATE",
+            "serviceAccountEmail": config_values['service_account_email'],
+        },
+        dag=dag
     )
-    
-    # Process data with proper type annotation
-    processed_data = (rate_limited_data 
-        | 'PrepareData' >> beam.ParDo(PrepareData())
-        .with_output_types(mutation)
-    )
-    
-    # Write to Spanner without batching
-    _ = (processed_data | "WriteToSpanner" >> 
-        sp.SpannerInsertOrUpdate(
-            project_id=known_args.spanner_project,
-            instance_id=known_args.spanner_instance,
-            database_id=known_args.spanner_dataset,
-            table=known_args.spanner_table,
-            expansion_service=known_args.expansion_service,
-            max_number_mutations=5000,
-            max_batch_size_bytes=1048576,
-            max_number_rows=5000,
-        )
-    )
+    end = DummyOperator(task_id='end')
+    start >> trigger_template_task >> end
+raise ValueError("time data %r does not match format %r" %
+ValueError: time data '{{(data_interval_end - macros.timedelta(days=2, hours=1)).strftime("%Y-%m-%d %H:%M:%S")}}' does not match format '%Y-%m-%d %H:%M:%S'
