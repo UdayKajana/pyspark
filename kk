@@ -35,6 +35,7 @@ logging.getLogger().setLevel(logging.ERROR)
 known_args, beam_args = parse_arguments()
 
 mutation = getMutation(known_args.process)
+# Register coder early to ensure it's available throughout the pipeline
 beam.coders.registry.register_coder(mutation, beam.coders.RowCoder)
 
 class RateLimitFn(beam.DoFn):
@@ -65,15 +66,15 @@ class RateLimitFn(beam.DoFn):
         
         yield element
 
-
 class PrepareData(beam.DoFn):
-    def process(self, element) -> Iterator[NQESSiteScores]:
+    def process(self, element) -> Iterator[mutation]:  # Explicitly specify return type
         try:
             yield self.transform_to_mutation(element)
         except Exception as e:
             logging.error(f"Error processing element: {element}")
             logging.error(f"Error details: {str(e)}")
             raise
+    
     def transform_to_mutation(self, row):
         return mutation.setMutation(row)
 
@@ -98,20 +99,21 @@ with beam.Pipeline(options=pipeline_options) as p:
         use_standard_sql=True,
         bigquery_job_labels={'parallelism': '50'}
     ))
-    data1 = (data | "FusionBreak" >> beam.Reshuffle())
-    processed_data = (data1 | 'PrepareData' >> 
-        beam.ParDo(PrepareData())
-        .with_output_types(mutation))
-    # Write to Spanner
-
-    rate_limited_data = (processed_data 
-        | "RateLimitBeforeWrite" >> beam.ParDo(RateLimitFn(elements_per_minute=100000))
-        | "BatchForSpanner" >> beam.BatchElements(
-            min_batch_size=500,
-            max_batch_size=2000
-        )
+    
+    # Add fusion break and rate limiting before data preparation
+    rate_limited_data = (data 
+        | "FusionBreak" >> beam.Reshuffle()
+        | "RateLimitBeforePrep" >> beam.ParDo(RateLimitFn(elements_per_minute=100000))
     )
-    _ = (rate_limited_data | "WriteToSpanner" >> 
+    
+    # Process data with proper type annotation
+    processed_data = (rate_limited_data 
+        | 'PrepareData' >> beam.ParDo(PrepareData())
+        .with_output_types(mutation)
+    )
+    
+    # Write to Spanner without batching
+    _ = (processed_data | "WriteToSpanner" >> 
         sp.SpannerInsertOrUpdate(
             project_id=known_args.spanner_project,
             instance_id=known_args.spanner_instance,
@@ -120,11 +122,6 @@ with beam.Pipeline(options=pipeline_options) as p:
             expansion_service=known_args.expansion_service,
             max_number_mutations=5000,
             max_batch_size_bytes=1048576,
-            max_number_rows = 5000,
-            
+            max_number_rows=5000,
         )
     )
-
-
-
-with this code, I am getting the following error: 
