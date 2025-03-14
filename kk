@@ -1,22 +1,22 @@
-processed_data = (data1 
-    | 'PrepareData' >> beam.ParDo(PrepareData()).with_output_types(mutation)
-    | 'Reshuffle' >> beam.Reshuffle()  # Add reshuffle for better parallelism
-)
+gcloud spanner instances describe INSTANCE_ID --format="default(nodeCount,processingUnits,state,config)"
+
+gcloud monitoring metrics list | grep spanner
 
 
---max_num_workers=50 \
---autoscaling_algorithm=THROUGHPUT_BASED \
---disk_size_gb=100 \
---worker_machine_type=n1-standard-4
-
-max_number_mutations=2000,
-        max_batch_size_bytes=5*1024*1024,
+gcloud monitoring metrics describe spanner.googleapis.com/instance/cpu/utilization
 
 
---experiments=use_runner_v2 \
---dataflow_service_options=worker_region=us-east4 \
---dataflow_service_options=enable_google_cloud_profiler \
---experiments=enable_heavyweight_hooks \
---job_endpoint_provider=dataflow \
---experiments=enable_streaming_engine \
---experiments=streaming_mode_execution_timeout_mins=240
+gcloud monitoring time-series list \
+    "spanner.googleapis.com/instance/cpu/utilization" \
+    --instance-id=INSTANCE_ID \
+    --project=PROJECT_ID \
+    --filter="resource.type=spanner_instance AND resource.labels.instance_id=INSTANCE_ID" \
+    --time-series-duration=P1D
+
+
+gcloud monitoring time-series list \
+    "spanner.googleapis.com/instance/cpu/utilization" \
+    --project=PROJECT_ID \
+    --filter="resource.type=spanner_instance AND resource.labels.instance_id=INSTANCE_ID" \
+    --time-series-duration=PT1H \
+    --format="csv(time.iso,value)"
