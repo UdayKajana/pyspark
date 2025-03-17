@@ -1,19 +1,16 @@
-gcloud monitoring metrics list "spanner.googleapis.com/instance/cpu/utilization" \
-  --project=PROJECT_ID \
-  --filter="resource.type=spanner_instance AND resource.labels.instance_id=INSTANCE_ID AND resource.labels.database_id=DATABASE_ID" \
-  --start-time="-1h" \
-  --end-time="now"
-
-gcloud monitoring metrics list "spanner.googleapis.com/instance/cpu/utilization" \
-  --project=PROJECT_ID \
+gcloud monitoring time-series list \
+  "spanner.googleapis.com/instance/cpu/utilization" \
   --filter="resource.type=spanner_instance AND resource.labels.instance_id=INSTANCE_ID" \
-  --start-time="-1h" \
-  --end-time="now" \
-  --format="table(timeSeries.pointData.timeInterval.endTime, timeSeries.pointData.values.number.value)"
-
-
-gcloud monitoring metrics list "spanner.googleapis.com/instance/cpu/utilization" \
   --project=PROJECT_ID \
+  --interval=now-1h,now
+
+gcloud monitoring metrics descriptors list \
+  --filter="metric.type=spanner.googleapis.com/instance/cpu/utilization"
+
+
+gcloud monitoring time-series list \
+  "spanner.googleapis.com/instance/cpu/utilization" \
   --filter="resource.type=spanner_instance AND resource.labels.instance_id=INSTANCE_ID" \
-  --start-time="-1h" \
-  --end-time="now"
+  --project=PROJECT_ID \
+  --interval=now-1h,now \
+  --format="table(timeSeriesData.pointData.timeInterval.endTime, timeSeriesData.pointData.values.doubleValue)"
